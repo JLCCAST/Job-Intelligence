@@ -1,10 +1,9 @@
 """
-Modelos para el endpoint POST /analyze-job.
-Por ahora solo extrae y limpia el contenido.
+Modelos para el endpoint POST /analyze-job y para la extracción de tecnologías con Gemini
 """
 
 from typing import Literal, Optional
-from pydantic import BaseModel, HttpUrl, model_validator
+from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 
 class AnalyzeJobRequest(BaseModel):
@@ -34,3 +33,41 @@ class AnalyzeJobResponse(BaseModel):
     raw_length: int
     cleaned_text: Optional[str] = None
     error_detail: Optional[str] = None
+
+
+class ExtractedTechnology(BaseModel):
+    """
+    Una tecnología detectada en la oferta, con su contexto replica 1 a 1 los campos de la tabla job_technology, 
+    para que guardar esto en la BD después sea directo, sin transformación.
+    """
+    name: str = Field(description="Nombre de la tecnología tal como aparece en el texto")
+    category: Literal[
+        "Programming", "Database", "Cloud", "BI_Tool", "Automation_Tool",
+        "Framework", "Methodology", "Soft_Skill", "Other",
+    ]
+    requirement_type: Literal["required", "preferred"]
+    level: Literal["basico", "intermedio", "avanzado", "unspecified"]
+    confidence: float = Field(
+        ge=0.0, le=1.0,
+        description="Qué tan seguro está el modelo de esta extracción, de 0 a 1",
+    )
+    evidence_text: str = Field(
+        description="Frase textual de la oferta de donde se extrajo esto"
+    )
+ 
+ 
+class JobExtraction(BaseModel):
+    job_title: str
+    area: Literal[
+        "BI", "Data_Analytics", "Data_Engineering", "Data_Science",
+        "Software_Dev", "Cybersecurity", "Cloud", "IT_Support", "Other",
+    ]
+    english_level: Literal["basico", "intermedio", "avanzado", "no_especificado"]
+    is_offer_available: bool = Field(
+        description=(
+            "False si el texto indica que la oferta ya está cerrada, "
+            "cubierta, expirada o no disponible -- en ese caso "
+            "technologies debe quedar vacío, no inventar requisitos."
+        )
+    )
+    technologies: list[ExtractedTechnology]
