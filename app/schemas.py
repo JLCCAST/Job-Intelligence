@@ -25,14 +25,34 @@ class AnalyzeJobRequest(BaseModel):
 
 class AnalyzeJobResponse(BaseModel):
     """
-    Salida del endpoint por ahora es solo el resultado de la
-    extracción + limpieza.
+    Salida del endpoint.
+
+    Se separan DOS cosas que antes no existían por separado:
+
+    - `extraction_status`: ¿se logró obtener y analizar el texto?
+    - `registration_status`: ¿se guardó en la BD, y por qué no?
+
+    Una oferta puede extraerse perfecto (`success`) y aun así no
+    guardarse, porque ya estaba cerrada o porque esa URL ya había
+    sido registrada antes.
     """
     source: Literal["url", "manual_text"]
     extraction_status: Literal["success", "partial", "failed"]
+    registration_status: Literal[
+        "saved",          # se insertó un job nuevo
+        "duplicate",      # esa URL ya estaba registrada -> job_id existente
+        "offer_closed",   # la oferta ya no está disponible, no se guarda
+        "not_attempted",  # no se llegó a intentar (falló antes)
+    ] = "not_attempted"
     raw_length: int
     cleaned_text: Optional[str] = None
     error_detail: Optional[str] = None
+
+    job_id: Optional[int] = None
+    extraction: Optional["JobExtraction"] = None
+    tecnologias_vinculadas: Optional[int] = None
+    tecnologias_creadas: Optional[list[str]] = None
+    tecnologias_para_revisar: Optional[list[str]] = None
 
 
 class ExtractedTechnology(BaseModel):
@@ -88,3 +108,7 @@ class JobExtraction(BaseModel):
         )
     )
     technologies: list[ExtractedTechnology]
+
+# JobExtraction se define más abajo que AnalyzeJobResponse, así que
+# hay que resolver la referencia adelantada una vez que ya existe.
+AnalyzeJobResponse.model_rebuild()
