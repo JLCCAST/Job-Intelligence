@@ -58,6 +58,23 @@ class ExtractedTechnology(BaseModel):
  
 class JobExtraction(BaseModel):
     job_title: str
+    company_name: str = Field(
+        description=(
+            "Nombre de la empresa que publica la oferta, tal como aparece "
+            "en el texto. Si NO aparece de forma explícita, devolver "
+            "exactamente 'no_especificado' -- no inferirlo ni inventarlo."
+        )
+    )
+    source_name: Literal[
+        "LinkedIn", "Indeed", "Computrabajo", "Bumeran",
+        "Career Page", "Otro", "no_especificado",
+    ] = Field(
+        description=(
+            "Portal donde se publicó la oferta, SOLO si el texto lo menciona "
+            "explícitamente. Si no hay evidencia en el texto, "
+            "'no_especificado'."
+        )
+    )
     area: Literal[
         "BI", "Data_Analytics", "Data_Engineering", "Data_Science",
         "Software_Dev", "Cybersecurity", "Cloud", "IT_Support", "Other",
