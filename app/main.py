@@ -15,7 +15,11 @@ from fastapi import FastAPI
 
 from app.cleaner import clean_html, normalize_whitespace
 from app.gemini import extract_job_info
-from app.repository import buscar_job_por_url, insert_job_with_technologies
+from app.repository import (
+    buscar_job_por_url,
+    calcular_y_guardar_match_score,
+    insert_job_with_technologies,
+)
 from app.scraper import fetch_html
 from app.schemas import AnalyzeJobRequest, AnalyzeJobResponse
 from app.source_resolver import resolver_source
@@ -124,10 +128,21 @@ def analyze_job(request: AnalyzeJobRequest) -> AnalyzeJobResponse:
         descripcion_limpia=cleaned,
     )
 
+    # ----------------------------------------------------------
+    # PASO 5: Match Score (determinístico, sobre lo ya guardado)
+    # ----------------------------------------------------------
+    # Se calcula DESPUÉS del insert porque lee job_technology, que
+    # recién existe una vez guardada la oferta.
+    score = calcular_y_guardar_match_score(resultado_insert.job_id)
+
     return AnalyzeJobResponse(
         source=origen,
         extraction_status=estado_extraccion,
         registration_status="saved",
+        match_score=score.score,
+        cumple_ingles=score.cumple_ingles,
+        tecnologias_faltantes=score.faltantes,
+        requisitos_bajo_nivel=score.requisitos_bajo_nivel,
         raw_length=raw_length,
         cleaned_text=cleaned,
         extraction=extraction,

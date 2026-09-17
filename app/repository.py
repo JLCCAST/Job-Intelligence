@@ -26,7 +26,8 @@ from typing import Optional
 import psycopg2
 
 from app.matcher import match_or_create_technology
-from app.schemas import JobExtraction
+from app.schemas import ExtractedTechnology, JobExtraction
+from app.scoring import MatchScoreResult, calcular_match_score
 
 # Gemini devuelve este valor cuando la oferta no da el nombre de la
 # empresa (ej. "importante empresa del rubro retail").
@@ -392,3 +393,204 @@ def buscar_job_por_url(url: Optional[str]) -> Optional[int]:
                 return row[0] if row else None
     finally:
         conn.close()
+
+
+# --------------------------------------------------------------
+# PERFIL PROPIO (user_skill)
+# --------------------------------------------------------------
+
+def upsert_user_skill(
+    cur,
+    nombre: str,
+    categoria: str,
+    level: str,
+    meses_experiencia: Optional[int] = None,
+    evidencia: Optional[str] = None,
+) -> int:
+    """
+    Declara (o actualiza) una habilidad propia.
+
+    `user_skill.technology_id` es FK a `technology`, así que primero
+    hay que resolver/crear la tecnología. Se reutiliza a propósito
+    `match_or_create_technology` en vez de duplicar la lógica de
+    alias: si mañana mejora el matching, el perfil se beneficia
+    igual que el pipeline.
+
+    Se arma un ExtractedTechnology con confidence=1.0 porque esto
+    NO viene de Gemini -- lo declaras tú, no hay incertidumbre, y
+    por eso nunca queda marcado para revisión.
+    """
+    tech = ExtractedTechnology(
+        name=nombre,
+        category=categoria,
+        # Estos dos campos no aplican a una habilidad propia (son del
+        # contexto oferta<->tecnología), pero el modelo los exige.
+        requirement_type="required",
+        level=level,
+        confidence=1.0,
+        evidence_text=evidencia or f"Perfil propio: {nombre}",
+    )
+    match = match_or_create_technology(cur, tech)
+
+    # PK es technology_id, así que reejecutar el seed actualiza en
+    # vez de fallar por clave duplicada.
+    cur.execute(
+        """
+        INSERT INTO user_skill (technology_id, level, meses_experiencia, evidencia)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (technology_id) DO UPDATE SET
+            level = EXCLUDED.level,
+            meses_experiencia = EXCLUDED.meses_experiencia,
+            evidencia = EXCLUDED.evidencia
+        """,
+        (match.technology_id, level, meses_experiencia, evidencia),
+    )
+    return match.technology_id
+
+
+def cargar_perfil(habilidades: list[dict]) -> int:
+    """
+    Carga una lista de habilidades en una sola transacción.
+
+    Cada dict: {nombre, categoria, level, meses_experiencia?, evidencia?}
+    Devuelve cuántas se cargaron.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                for h in habilidades:
+                    upsert_user_skill(
+                        cur,
+                        nombre=h["nombre"],
+                        categoria=h["categoria"],
+                        level=h["level"],
+                        meses_experiencia=h.get("meses_experiencia"),
+                        evidencia=h.get("evidencia"),
+                    )
+        return len(habilidades)
+    finally:
+        conn.close()
+
+
+# --------------------------------------------------------------
+# MATCH SCORE (Fase 5)
+# --------------------------------------------------------------
+
+# El inglés se declara en user_skill como una "tecnología" más.
+# Se aceptan variantes de escritura porque es el único caso donde
+# el nombre lo escribes tú a mano y la tilde se presta a errores.
+NOMBRES_INGLES = ("inglés", "ingles", "english")
+
+
+def _leer_requisitos(cur, job_id: int) -> list[dict]:
+    """Qué pide la oferta, desde job_technology."""
+    cur.execute(
+        """
+        SELECT jt.technology_id, t.nombre_canonico,
+               jt.requirement_type, jt.level
+        FROM job_technology jt
+        JOIN technology t ON t.technology_id = jt.technology_id
+        WHERE jt.job_id = %s
+        ORDER BY t.nombre_canonico
+        """,
+        (job_id,),
+    )
+    return [
+        {
+            "technology_id": r[0],
+            "nombre": r[1],
+            "requirement_type": r[2],
+            "level": r[3],
+        }
+        for r in cur.fetchall()
+    ]
+
+
+def _leer_mi_perfil(cur) -> dict[int, str]:
+    """Lo que tengo, desde user_skill: {technology_id: level}."""
+    cur.execute("SELECT technology_id, level FROM user_skill")
+    return {r[0]: r[1] for r in cur.fetchall()}
+
+
+def _leer_mi_nivel_ingles(cur) -> Optional[str]:
+    """
+    Mi nivel de inglés declarado. Se busca por nombre canónico y
+    también por alias, y aceptando variantes con/sin tilde.
+    """
+    cur.execute(
+        """
+        SELECT us.level
+        FROM user_skill us
+        JOIN technology t ON t.technology_id = us.technology_id
+        LEFT JOIN technology_alias ta ON ta.technology_id = t.technology_id
+        WHERE LOWER(t.nombre_canonico) = ANY(%s)
+           OR LOWER(ta.alias_texto) = ANY(%s)
+        LIMIT 1
+        """,
+        (list(NOMBRES_INGLES), list(NOMBRES_INGLES)),
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def calcular_y_guardar_match_score(job_id: int) -> MatchScoreResult:
+    """
+    Calcula el Match Score de un job y lo persiste en
+    `job.match_score`.
+
+    Se guarda el número para que Power BI (Fase 6) lo lea directo,
+    sin tener que reimplementar la fórmula en DAX. La fuente de
+    verdad de la fórmula es scoring.py, en un solo lugar.
+
+    Es recalculable: si cambias tu user_skill, vuelves a llamar
+    esto y el score se actualiza.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT ingles_requerido FROM job WHERE job_id = %s",
+                    (job_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise ValueError(f"No existe el job_id={job_id}.")
+                ingles_requerido = row[0]
+
+                resultado = calcular_match_score(
+                    requisitos=_leer_requisitos(cur, job_id),
+                    mis_niveles=_leer_mi_perfil(cur),
+                    ingles_requerido=ingles_requerido,
+                    mi_nivel_ingles=_leer_mi_nivel_ingles(cur),
+                )
+
+                cur.execute(
+                    "UPDATE job SET match_score = %s WHERE job_id = %s",
+                    (resultado.score, job_id),
+                )
+
+        return resultado
+    finally:
+        conn.close()
+
+
+def recalcular_todos_los_scores() -> list[tuple[int, Optional[float]]]:
+    """
+    Recalcula el score de TODOS los jobs registrados.
+
+    Se usa después de editar tu perfil: los scores viejos quedaron
+    calculados contra el perfil anterior y ya no son comparables
+    entre sí.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT job_id FROM job ORDER BY job_id")
+                ids = [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    return [(job_id, calcular_y_guardar_match_score(job_id).score) for job_id in ids]

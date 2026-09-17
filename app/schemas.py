@@ -54,6 +54,16 @@ class AnalyzeJobResponse(BaseModel):
     tecnologias_creadas: Optional[list[str]] = None
     tecnologias_para_revisar: Optional[list[str]] = None
 
+    # --- Match Score (Fase 5) ---
+    # `match_score` es None cuando la oferta no pide nada evaluable:
+    # eso NO es un 0%, es "no hay información para comparar".
+    match_score: Optional[float] = None
+    cumple_ingles: Optional[bool] = None
+    tecnologias_faltantes: Optional[list[str]] = None
+    # Requisitos obligatorios que tienes pero en un nivel menor al
+    # pedido: el score los suaviza, esta lista los deja visibles.
+    requisitos_bajo_nivel: Optional[list[str]] = None
+
 
 class ExtractedTechnology(BaseModel):
     """

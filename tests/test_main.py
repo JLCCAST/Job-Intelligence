@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 import app.main as main_module
 from app.main import app
 from app.repository import InsertJobResult
+from app.scoring import MatchScoreResult
 from app.scraper import FetchResult
 from app.schemas import ExtractedTechnology, JobExtraction
 from app.gemini import ExtractionResult
@@ -73,7 +74,12 @@ def espia(monkeypatch):
     def fake_buscar(url):
         return registro["duplicado"]
 
+    def fake_score(job_id):
+        registro["score"] = job_id
+        return MatchScoreResult(score=87.5, cumple_ingles=True, faltantes=["Azure"])
+
     registro["extraction"] = _extraction()
+    monkeypatch.setattr(main_module, "calcular_y_guardar_match_score", fake_score)
     monkeypatch.setattr(main_module, "extract_job_info", fake_extract)
     monkeypatch.setattr(main_module, "insert_job_with_technologies", fake_insert)
     monkeypatch.setattr(main_module, "buscar_job_por_url", fake_buscar)
@@ -107,6 +113,9 @@ def test_texto_manual_se_guarda(espia):
     assert d["registration_status"] == "saved"
     assert d["job_id"] == 123
     assert d["tecnologias_vinculadas"] == 1
+    assert d["match_score"] == 87.5
+    assert d["cumple_ingles"] is True
+    assert d["tecnologias_faltantes"] == ["Azure"]
 
 
 def test_url_scraping_exitoso_se_guarda(espia, monkeypatch):
