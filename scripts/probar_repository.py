@@ -2,7 +2,7 @@
 Prueba de repository.py contra la Supabase REAL.
 
 Correr desde la raíz del proyecto, con el venv activo:
-    python probar_repository.py
+    python -m scripts.probar_repository
 
 Requiere SUPABASE_DB_URL en el .env.
 

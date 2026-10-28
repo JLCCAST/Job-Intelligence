@@ -1,0 +1,57 @@
+# Qué busca Sabueso cada día. No contiene datos personales: va al repo.
+
+# Búsquedas que se hacen en cada fuente (una petición por búsqueda).
+consultas:
+  - analista de datos
+  - data analyst
+  - business intelligence
+  - data engineer
+  - analytics
+
+# Solo ofertas de estos países (como los escribe la fuente)...
+paises: [Peru]
+# ...o 100% remotas.
+incluir_remoto: true
+
+# El título debe contener al menos una de estas palabras (sin importar
+# mayúsculas ni tildes). Filtra antes de gastar Gemini: las búsquedas
+# de la fuente devuelven también QA, soporte, desarrollo, etc.
+palabras_clave_titulo:
+  - data
+  - datos
+  - bi
+  - business intelligence
+  - inteligencia de negocios
+  - analytics
+  - analítica
+  - etl
+  - sql
+  - power bi
+  - reporting
+
+# Si el título tiene alguna de estas, se descarta (buscas prácticas o
+# puestos junior). Borra las que quieras volver a ver.
+palabras_excluidas_titulo:
+  - senior
+  - sr
+  - semi senior
+  - ssr
+  - lead
+  - líder
+  - arquitecto
+  - architect
+  - principal
+  - manager
+  - head
+  - jefe
+
+# Tope de ofertas NUEVAS que se analizan con Gemini por corrida. Lupa
+# usa los modelos "lite" (500 peticiones/día cada uno en el plan
+# gratuito), así que el tope es para que una corrida no tarde demasiado,
+# no por la cuota. Las que sobren van en la siguiente corrida.
+max_nuevas_por_corrida: 30
+
+# Pausa entre una oferta y la siguiente. Sin ella Gemini respondía
+# 429 (demasiadas peticiones) a mitad de la corrida. Los "lite" aceptan
+# 15 por minuto: 6 s deja margen para los reintentos.
+pausa_entre_ofertas_segundos: 6

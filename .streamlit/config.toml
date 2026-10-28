@@ -1,0 +1,49 @@
+# Tema visual de la app. Claro y oscuro definidos aparte (no es una
+# inversión automática); el visitante elige en el menú de Streamlit.
+
+[theme]
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Plus Jakarta Sans:https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap, sans-serif"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+baseFontSize = 15
+baseRadius = "0.75rem"
+buttonRadius = "0.6rem"
+showWidgetBorder = true
+showSidebarBorder = false
+metricValueFontWeight = 700
+# Paleta categórica validada (azul, naranja, aqua, amarillo...).
+chartCategoricalColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
+
+[theme.light]
+primaryColor = "#2a78d6"
+backgroundColor = "#f6f7fb"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#1b2433"
+borderColor = "#e3e7ef"
+dataframeBorderColor = "#e3e7ef"
+dataframeHeaderBackgroundColor = "#f1f4f9"
+linkColor = "#2a78d6"
+
+[theme.light.sidebar]
+backgroundColor = "#0f1a2e"
+secondaryBackgroundColor = "#1a2740"
+textColor = "#e6ebf4"
+borderColor = "#24324e"
+primaryColor = "#6da7ec"
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#0f1219"
+secondaryBackgroundColor = "#171b24"
+textColor = "#e8ebf1"
+borderColor = "#262c38"
+dataframeBorderColor = "#262c38"
+dataframeHeaderBackgroundColor = "#1c212c"
+linkColor = "#6da7ec"
+
+[theme.dark.sidebar]
+backgroundColor = "#0a0d13"
+secondaryBackgroundColor = "#151a23"
+textColor = "#dfe4ee"
+borderColor = "#1e2430"
+primaryColor = "#6da7ec"

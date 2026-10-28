@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="48" viewBox="0 0 220 48" role="img" aria-label="Job-Intelligence">
+  <rect x="2" y="4" width="40" height="40" rx="11" fill="#2a78d6"/>
+  <circle cx="22" cy="24" r="12" fill="none" stroke="#ffffff" stroke-width="2.4" opacity="0.9"/>
+  <path d="M22 14 L26 24 L22 34 L18 24 Z" fill="#ffffff"/>
+  <path d="M22 14 L26 24 L18 24 Z" fill="#eb6834"/>
+  <text x="52" y="31" font-family="Plus Jakarta Sans, Inter, Segoe UI, sans-serif" font-size="19" font-weight="800" fill="#e6ebf4">Job-Intelligence</text>
+</svg>

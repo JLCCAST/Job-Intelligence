@@ -2,7 +2,7 @@
 Prueba manual de los campos nuevos (company_name / source_name).
 
 Correr desde la raíz del proyecto, con el venv activo:
-    python probar_extraccion.py
+    python -m scripts.probar_extraccion
 
 Requiere GEMINI_API_KEY en el .env.
 """

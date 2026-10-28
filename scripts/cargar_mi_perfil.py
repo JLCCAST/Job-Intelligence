@@ -4,7 +4,7 @@ cargar_mi_perfil.py
 Carga tu perfil de habilidades en la tabla `user_skill`.
 Sin esto, el Match Score de toda oferta da 0%.
 
-    python cargar_mi_perfil.py
+    python -m scripts.cargar_mi_perfil
 
 Niveles válidos: "basico", "intermedio", "avanzado".
 

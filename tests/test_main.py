@@ -1,7 +1,7 @@
 """
 Tests del endpoint /analyze-job.
 
-El endpoint ahora encadena scraper -> cleaner -> Gemini -> BD, así
+El endpoint pasa por Batuta (Lupa -> Archivero -> Balanza), así
 que se reemplazan con monkeypatch las tres piezas que salen de la
 máquina: fetch_html (red), extract_job_info (API de Gemini) y las
 funciones de repository (Supabase). Así los tests corren sin red,
@@ -11,7 +11,7 @@ sin cuota y sin escribir en la base.
 import pytest
 from fastapi.testclient import TestClient
 
-import app.main as main_module
+from app.agents import archivero, balanza, lupa
 from app.main import app
 from app.repository import InsertJobResult
 from app.scoring import MatchScoreResult
@@ -79,10 +79,10 @@ def espia(monkeypatch):
         return MatchScoreResult(score=87.5, cumple_ingles=True, faltantes=["Azure"])
 
     registro["extraction"] = _extraction()
-    monkeypatch.setattr(main_module, "calcular_y_guardar_match_score", fake_score)
-    monkeypatch.setattr(main_module, "extract_job_info", fake_extract)
-    monkeypatch.setattr(main_module, "insert_job_with_technologies", fake_insert)
-    monkeypatch.setattr(main_module, "buscar_job_por_url", fake_buscar)
+    monkeypatch.setattr(balanza, "calcular_y_guardar_match_score", fake_score)
+    monkeypatch.setattr(lupa, "extract_job_info", fake_extract)
+    monkeypatch.setattr(archivero, "insert_job_with_technologies", fake_insert)
+    monkeypatch.setattr(lupa, "buscar_job_por_url", fake_buscar)
     return registro
 
 
@@ -90,7 +90,7 @@ def _mock_fetch_ok(monkeypatch, html=None):
     if html is None:
         html = f"<html><body><main><h1>Practicante BI</h1><p>{TEXTO_LARGO}</p></main></body></html>"
     monkeypatch.setattr(
-        main_module, "fetch_html",
+        lupa, "fetch_html",
         lambda url: FetchResult(success=True, html=html, status_code=200),
     )
 
@@ -152,7 +152,7 @@ def test_sin_url_se_usa_la_fuente_de_gemini(espia):
 
 def test_scraping_fallido_no_llama_a_gemini(espia, monkeypatch):
     monkeypatch.setattr(
-        main_module, "fetch_html",
+        lupa, "fetch_html",
         lambda url: FetchResult(success=False, error="Timeout: el servidor no respondió en 10s."),
     )
 
@@ -168,7 +168,7 @@ def test_scraping_fallido_no_llama_a_gemini(espia, monkeypatch):
 def test_gemini_caido_no_guarda_nada(espia, monkeypatch):
     _mock_fetch_ok(monkeypatch)
     monkeypatch.setattr(
-        main_module, "extract_job_info",
+        lupa, "extract_job_info",
         lambda texto: ExtractionResult(success=False, error="503 UNAVAILABLE"),
     )
 
@@ -211,3 +211,23 @@ def test_texto_corto_queda_partial(espia):
 
     assert d["extraction_status"] == "partial"
     assert d["registration_status"] == "saved"   # partial no impide guardar
+
+
+def test_texto_con_link_guarda_el_link_y_toma_la_fuente_del_dominio(espia, monkeypatch):
+    # Con texto, nunca se descarga la URL aunque venga.
+    monkeypatch.setattr(lupa, "fetch_html", lambda url: pytest.fail("no debía descargar"))
+    d = client.post("/analyze-job", json={
+        "text": TEXTO_LARGO,
+        "url": "https://www.linkedin.com/jobs/view/123",
+    }).json()
+    assert d["source"] == "manual_text"
+    assert d["registration_status"] == "saved"
+    assert espia["source_name"] == "LinkedIn"
+
+
+def test_texto_con_link_ya_registrado_es_duplicado(espia):
+    espia["duplicado"] = 77
+    d = client.post("/analyze-job", json={"text": TEXTO_LARGO, "url": "https://www.linkedin.com/jobs/view/123"}).json()
+    assert d["registration_status"] == "duplicate"
+    assert d["job_id"] == 77
+    assert espia["gemini"] == 0

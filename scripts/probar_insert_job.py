@@ -2,7 +2,7 @@
 Prueba de insert_job_with_technologies contra la Supabase REAL.
 
 Correr desde la raíz del proyecto, con el venv activo:
-    python probar_insert_job.py
+    python -m scripts.probar_insert_job
 
 NO llama a Gemini: arma un JobExtraction a mano, para probar solo
 la capa de BD sin gastar cuota de la API.

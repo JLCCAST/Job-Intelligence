@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 class AnalyzeJobRequest(BaseModel):
     """
-    Entrada del endpoint. El usuario debe enviar `url` (Opción A) O `text` (Opción B, fallback manual),
-    pero al menos uno es obligatorio.
+    Entrada del endpoint. El usuario debe enviar `url` (Opción A) o `text` (Opción B, fallback manual),
+    al menos uno. Si envía ambos, se analiza el texto y la url se guarda como link de la oferta.
     """
     url: Optional[HttpUrl] = None
     text: Optional[str] = None
@@ -36,7 +36,7 @@ class AnalyzeJobResponse(BaseModel):
     guardarse, porque ya estaba cerrada o porque esa URL ya había
     sido registrada antes.
     """
-    source: Literal["url", "manual_text"]
+    source: Literal["url", "manual_text", "api"]  # "api": texto traído por Sabueso
     extraction_status: Literal["success", "partial", "failed"]
     registration_status: Literal[
         "saved",          # se insertó un job nuevo
@@ -96,7 +96,7 @@ class JobExtraction(BaseModel):
         )
     )
     source_name: Literal[
-        "LinkedIn", "Indeed", "Computrabajo", "Bumeran",
+        "LinkedIn", "Indeed", "Computrabajo", "Bumeran", "Get on Board",
         "Career Page", "Otro", "no_especificado",
     ] = Field(
         description=(

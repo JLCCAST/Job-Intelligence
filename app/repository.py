@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import psycopg2
+from dotenv import load_dotenv
 
 from app.matcher import match_or_create_technology
 from app.schemas import ExtractedTechnology, JobExtraction
@@ -37,6 +38,10 @@ VALOR_EMPRESA_NO_ESPECIFICADA = "no_especificado"
 # vez de crear una fila por cada variante de texto vago. Se lee
 # decente en Power BI, a diferencia de guardar 'no_especificado'.
 EMPRESA_CENTINELA = "No especificada"
+
+# Antes dependía de que alguien importara gemini.py primero (que es
+# quien llamaba a load_dotenv); un script que solo usa la BD fallaba.
+load_dotenv()
 
 
 def get_connection():
@@ -594,3 +599,65 @@ def recalcular_todos_los_scores() -> list[tuple[int, Optional[float]]]:
         conn.close()
 
     return [(job_id, calcular_y_guardar_match_score(job_id).score) for job_id in ids]
+
+
+# --------------------------------------------------------------
+# DATOS PARA ADAPTAR EL CV (Fase: Preguntón / Pluma / Imprenta)
+# --------------------------------------------------------------
+
+def leer_oferta_para_cv(job_id: int) -> dict:
+    """
+    Todo lo que el flujo de CV necesita saber de una oferta ya
+    registrada: puesto, empresa, área y el desglose del Match Score
+    requisito por requisito.
+
+    Devuelve tipos simples (dict/list/str) a propósito: este dict
+    viaja en el estado de LangGraph, que se guarda en SQLite entre
+    la pregunta del Preguntón y tu respuesta.
+
+    NO guarda el score: solo lo recalcula para leer el desglose.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT j.puesto, c.nombre, j.area, j.ingles_requerido
+                FROM job j
+                JOIN company c ON c.company_id = j.company_id
+                WHERE j.job_id = %s
+                """,
+                (job_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError(f"No existe el job_id={job_id}.")
+            puesto, empresa, area, ingles_requerido = row
+
+            score = calcular_match_score(
+                requisitos=_leer_requisitos(cur, job_id),
+                mis_niveles=_leer_mi_perfil(cur),
+                ingles_requerido=ingles_requerido,
+                mi_nivel_ingles=_leer_mi_nivel_ingles(cur),
+            )
+    finally:
+        conn.close()
+
+    return {
+        "job_id": job_id,
+        "puesto": puesto,
+        "empresa": None if empresa == EMPRESA_CENTINELA else empresa,
+        "area": area,
+        "match_score": score.score,
+        "cumple_ingles": score.cumple_ingles,
+        "requisitos": [
+            {
+                "nombre": item.nombre,
+                "requirement_type": item.requirement_type,
+                "nivel_pedido": item.nivel_pedido,
+                "nivel_usuario": item.nivel_usuario,
+                "bajo_nivel": item.nombre in score.requisitos_bajo_nivel,
+            }
+            for item in score.items
+        ],
+    }

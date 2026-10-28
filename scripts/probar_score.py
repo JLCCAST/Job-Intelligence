@@ -1,7 +1,7 @@
 """
 Prueba del Match Score contra la Supabase REAL.
 
-    python probar_score.py
+    python -m scripts.probar_score
 
 NO llama a Gemini: usa los jobs que ya tienes registrados.
 

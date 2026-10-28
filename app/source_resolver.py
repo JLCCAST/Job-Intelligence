@@ -27,6 +27,8 @@ DOMINIO_A_SOURCE = {
     "computrabajo.com.pe": "Computrabajo",
     "bumeran.com": "Bumeran",
     "bumeran.com.pe": "Bumeran",
+    # Fuente de Sabueso (API pública). Fila creada en sql/002_fuente_getonbrd.sql.
+    "getonbrd.com": "Get on Board",
 }
 
 # Si hay URL pero el dominio no es de un portal conocido, en la

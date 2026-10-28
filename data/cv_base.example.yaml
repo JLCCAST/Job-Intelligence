@@ -1,0 +1,62 @@
+# Plantilla del CV base. Cópiala como data/cv_base.yaml (ignorado por
+# git) y complétala con tu CV real. Pon TODO lo que hayas hecho, aunque
+# no quepa en una página: Pluma elige qué mostrar para cada oferta y no
+# puede usar nada que no esté aquí.
+
+contacto:
+  nombre: Ana Pérez Ejemplo
+  email: ana.ejemplo@correo.com
+  telefono: "999999999"
+  ubicacion: Lima, Perú
+  linkedin: linkedin.com/in/ana-ejemplo
+  github: github.com/ana-ejemplo
+
+perfil: >-
+  Estudiante de Ingeniería de Sistemas con interés en analítica de datos.
+  Experiencia académica en SQL, Python y Power BI.
+
+experiencia:
+  - empresa: Empresa Ejemplo S.A.C.
+    cargo: Practicante de Datos
+    ubicacion: Lima
+    inicio: Enero 2025
+    fin: Actualidad
+    logros:
+      - Automaticé un reporte semanal en Python que antes tomaba 3 horas manuales.
+    stack: [Python, Excel]
+
+proyectos:
+  - nombre: Dashboard de Ventas
+    contexto: Curso de Inteligencia de Negocios
+    fecha: Jul 2025
+    logros:
+      - Construí un modelo estrella en SQL Server y un dashboard en Power BI con 8 KPIs.
+    stack: [SQL Server, Power BI]
+
+habilidades:
+  - grupo: Datos
+    items:
+      - {nombre: SQL, nivel: Intermedio}
+      - {nombre: Python, nivel: Básico}
+      - {nombre: Power BI}
+
+educacion:
+  - titulo: Ingeniería de Sistemas
+    institucion: Universidad Ejemplo
+    inicio: Marzo 2022
+    fin: Actualidad
+
+logros:
+  - titulo: Tercio superior
+    descripcion: Reconocimiento por rendimiento académico.
+
+certificados:
+  - {nombre: SQL desde cero, emisor: Plataforma Ejemplo}
+
+idiomas:
+  - {idioma: Español, nivel: Nativo}
+  - {idioma: Inglés, nivel: Intermedio}
+
+competencias:
+  - Trabajo en equipo
+  - Comunicación efectiva

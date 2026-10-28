@@ -217,3 +217,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Archivos de Power BI (pueden contener datos y la conexión a la BD)
+BI/
+*.pbix
+
+# Datos personales: CV base real y documentos generados (el repo es público)
+data/cv_base.yaml
+salidas/
+data/respuestas.yaml
+data/*.sqlite*
+data/logs/
+data/brujula_plan.json

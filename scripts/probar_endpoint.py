@@ -5,7 +5,7 @@ Levanta el servidor en otra terminal:
     uvicorn app.main:app --reload
 
 y luego, desde la raíz del proyecto:
-    python probar_endpoint.py
+    python -m scripts.probar_endpoint
 
 Valida el flujo end-to-end y, sobre todo, que reenviar la MISMA
 URL no cree un job duplicado.
