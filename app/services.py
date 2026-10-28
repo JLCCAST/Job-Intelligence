@@ -17,7 +17,6 @@ from app.schemas import AnalyzeJobResponse
 # la interfaz importe SOLO de services.
 from app.consultas import (  # noqa: F401
     aprobar_tecnologia,
-    cambiar_estado,
     demanda_tecnologias,
     guardar_habilidad,
     historial_estados,
@@ -28,6 +27,24 @@ from app.consultas import (  # noqa: F401
 )
 from app.cv.cargador import CVBaseNoEncontrado, cargar_cv_base  # noqa: F401
 from app.cv.respuestas import cargar_respuestas  # noqa: F401
+from app.cv import historial
+
+
+def cambiar_estado(job_id: int, estado: str, nota: Optional[str] = None) -> None:
+    """
+    Cambia el estado de una oferta. Al pasar a "Postulada", la última
+    versión del CV generada para esa oferta queda marcada como la enviada.
+    """
+    from app import consultas
+
+    consultas.cambiar_estado(job_id, estado, nota)
+    if estado == "Postulada":
+        historial.marcar_enviado(job_id)
+
+
+def versiones_cv(job_id: int) -> list[dict]:
+    """Todas las versiones del CV generadas para una oferta, la más nueva primero."""
+    return historial.versiones(job_id)
 
 
 def analizar_oferta(url: Optional[str] = None, text: Optional[str] = None) -> AnalyzeJobResponse:

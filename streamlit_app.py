@@ -9,7 +9,7 @@ puede reemplazar por un frontend HTML sin tocar la lógica.
 
 import streamlit as st
 
-from ui.comun import estilos
+from ui.comun import api_activa, estilos
 
 st.set_page_config(page_title="Job-Intelligence", page_icon="assets/icono.svg", layout="wide")
 st.logo("assets/logo.svg", icon_image="assets/icono.svg", size="large")
@@ -35,5 +35,9 @@ paginas = {
 
 pagina = st.navigation(paginas)
 with st.sidebar:
+    if api_activa():
+        st.caption(":material/check_circle: Marcador del navegador listo")
+    else:
+        st.caption(":material/power_off: Marcador apagado: abre la app con `python -m scripts.iniciar`")
     st.caption("Datos en tu PC y en tu Supabase · Gemini, plan gratuito")
 pagina.run()

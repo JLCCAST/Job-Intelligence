@@ -116,4 +116,8 @@ for col, clave, etiqueta in ((c1, "ruta_cv", "Descargar CV"), (c2, "ruta_brechas
     ruta = Path(flujo[clave])
     col.download_button(etiqueta, ruta.read_bytes(), file_name=ruta.name, mime=DOCX,
                         icon=":material/download:", use_container_width=True)
-st.caption(f"También quedaron guardados en `{Path(flujo['ruta_cv']).parent}`.")
+n_versiones = len(services.versiones_cv(job_id))
+st.caption(
+    f"Versión {n_versiones} para esta oferta, guardada en `{Path(flujo['ruta_cv']).parent}`. "
+    "Las anteriores siguen disponibles en **Postulaciones**."
+)

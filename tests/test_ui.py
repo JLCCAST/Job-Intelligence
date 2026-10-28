@@ -47,6 +47,7 @@ def base(monkeypatch):
     monkeypatch.setattr(services, "tecnologias_para_revisar", lambda: [])
     monkeypatch.setattr(services, "resumen_centinela", lambda: {"nuevas": [], "recordatorios": []})
     monkeypatch.setattr(services, "cargar_cv_base", lambda: ejemplo)
+    monkeypatch.setattr(services, "versiones_cv", lambda job_id: [])
 
 
 @pytest.fixture
@@ -167,3 +168,16 @@ def test_que_estudiar_muestra_ranking_y_agrega_al_perfil(monkeypatch):
     at.text_input[0].set_value("Proyecto de orquestación en GitHub")
     at.button[1].click().run()                       # "Agregar a mi perfil"
     assert guardado["args"] == ("Airflow", "Automation_Tool", "basico", None, "Proyecto de orquestación en GitHub")
+
+
+def test_postulaciones_muestra_el_cv_enviado(servicios_falsos, monkeypatch, tmp_path):
+    cv = tmp_path / "CV_Alicorp.docx"
+    cv.write_bytes(b"x")
+    monkeypatch.setattr(services, "versiones_cv", lambda job_id: [
+        {"job_id": 2, "version": 1, "fecha": "2026-10-27T10:00:00", "ruta_cv": str(cv),
+         "ruta_brechas": "b.docx", "usa_texto_de_pluma": True, "enviado": True,
+         "fecha_envio": "2026-10-27T11:00:00"},
+    ])
+    at = _pagina("postulaciones.py").run()
+    assert not at.exception
+    assert any("Enviado el 2026-10-27" in m.value for m in at.markdown)  # st.badge se renderiza como markdown

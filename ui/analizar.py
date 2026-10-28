@@ -2,7 +2,8 @@ import pandas as pd
 import streamlit as st
 
 from app import services
-from ui.comun import ANCHO_INDICADOR, encabezado, escribir, formato_score, nivel_encaje
+from app import pendientes
+from ui.comun import MARCADOR, api_activa, aviso_api_apagada, ANCHO_INDICADOR, encabezado, escribir, formato_score, nivel_encaje
 
 encabezado(
     "Analizar oferta",
@@ -10,7 +11,23 @@ encabezado(
     seccion="Ofertas",
 )
 
-modo = st.radio("¿Cómo traes la oferta?", ["Pegar texto", "URL"], horizontal=True)
+# ---------- Oferta enviada desde el navegador (marcador) ----------
+id_pendiente = st.query_params.get("pendiente")
+if id_pendiente:
+    recibida = pendientes.tomar(id_pendiente)
+    st.query_params.clear()
+    if recibida:
+        st.session_state["modo_analizar"] = "Pegar texto"
+        st.session_state["texto_oferta"] = recibida["texto"]
+        st.session_state["link_oferta"] = recibida["url"]
+        st.session_state.pop("ultimo_analisis", None)
+        st.session_state["aviso_recibida"] = True
+
+if st.session_state.pop("aviso_recibida", False):
+    st.success("Oferta recibida desde el navegador. Revisa el texto y pulsa **Analizar**.",
+               icon=":material/bookmark_added:")
+
+modo = st.radio("¿Cómo traes la oferta?", ["Pegar texto", "URL"], horizontal=True, key="modo_analizar")
 if modo == "URL":
     st.caption(
         "LinkedIn, Indeed, Computrabajo y Bumeran no se pueden leer por URL: "
@@ -19,17 +36,40 @@ if modo == "URL":
 
 with st.form("analizar"):
     if modo == "URL":
-        url = st.text_input("URL de la oferta", placeholder="https://...")
+        url = st.text_input("URL de la oferta", placeholder="https://...", key="url_oferta")
         texto = None
     else:
-        texto = st.text_area("Texto de la oferta", height=280, placeholder="Pega aquí la descripción completa")
+        texto = st.text_area("Texto de la oferta", height=280, placeholder="Pega aquí la descripción completa",
+                             key="texto_oferta")
         url = st.text_input(
             "Link de la oferta (opcional)",
             placeholder="https://www.linkedin.com/jobs/view/...",
+            key="link_oferta",
             help="Se guarda para abrir la oferta después, detectar si ya la registraste "
                  "y saber de qué portal viene. No se descarga: se usa el texto que pegaste.",
         )
     enviar = st.form_submit_button("Analizar", type="primary")
+
+with st.expander("Envía ofertas desde el navegador con un clic", icon=":material/bookmark_add:"):
+    if not api_activa():
+        aviso_api_apagada()
+    st.markdown(
+        "Con este marcador, estando en una oferta de LinkedIn, Computrabajo, Bumeran o cualquier "
+        "portal, un clic la manda aquí con su texto y su link. Tú abres la oferta, así que no hay scraping."
+    )
+    st.markdown(
+        """
+**Instalarlo (una sola vez):**
+1. Copia el código de abajo (botón de copiar a la derecha).
+2. En el navegador, clic derecho en la barra de favoritos → *Agregar página* (o *Añadir marcador*).
+3. Nombre: `Enviar a Job-Intelligence`. En **URL**, pega el código.
+"""
+    )
+    st.code(MARCADOR, language="javascript", wrap_lines=True)
+    st.markdown(
+        "**Usarlo:** abre una oferta, selecciona la descripción (si no seleccionas nada, envía toda "
+        "la página) y haz clic en el marcador. La app debe estar abierta con `python -m scripts.iniciar`."
+    )
 
 if enviar:
     url = (url or "").strip()
@@ -107,3 +147,4 @@ if r.job_id and r.registration_status in ("saved", "duplicate"):
         st.session_state["job_para_cv"] = r.job_id
         st.session_state.pop("flujo_cv", None)
         st.switch_page("ui/adaptar_cv.py")
+

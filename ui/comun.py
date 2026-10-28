@@ -199,3 +199,38 @@ def plural(n: int, singular: str, plural_: str) -> str:
 
 # Ancho fijo de los indicadores: así se acomodan en filas en vez de cortarse.
 ANCHO_INDICADOR = 230
+
+
+# Marcador del navegador ("bookmarklet"). Envía la selección (o toda la
+# página) y el link a la API local con un formulario normal: es una
+# navegación, no un fetch, así que no necesita CORS. Abre la app en la
+# misma pestaña (con target=_blank algunos navegadores lo convierten en
+# GET y se pierde el texto); para volver a la oferta: atrás.
+MARCADOR = (
+    "javascript:(()=>{const f=document.createElement('form');f.method='POST';"
+    "f.action='http://localhost:8000/recibir';"
+    "const t=(String(window.getSelection())||document.body.innerText).slice(0,60000);"
+    "[['url',location.href],['texto',t]].forEach(([n,v])=>{const i=document.createElement('input');"
+    "i.type='hidden';i.name=n;i.value=v;f.appendChild(i)});"
+    "document.body.appendChild(f);f.submit()})()"
+)
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def api_activa() -> bool:
+    """¿Está corriendo la API que recibe las ofertas del marcador (puerto 8000)?"""
+    import requests
+
+    try:
+        return requests.get("http://127.0.0.1:8000/docs", timeout=0.5).ok
+    except requests.RequestException:
+        return False
+
+
+def aviso_api_apagada() -> None:
+    st.warning(
+        "La API que recibe las ofertas del marcador no está corriendo, así que el botón del navegador "
+        "dará «No se puede acceder a este sitio». Cierra la app y ábrela con "
+        "`python -m scripts.iniciar`, que levanta la app y la API juntas.",
+        icon=":material/power_off:",
+    )

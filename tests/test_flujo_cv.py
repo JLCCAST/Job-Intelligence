@@ -11,6 +11,7 @@ from docx import Document
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.agents import balanza, batuta, imprenta, pluma, pregunton
+from app.cv import historial
 from app.cv import respuestas as modulo_respuestas
 from app.cv.cargador import RAIZ, cargar_cv_base
 from app.cv.modelo import CVBase
@@ -128,6 +129,7 @@ def entorno(monkeypatch, tmp_path):
     monkeypatch.setattr(pluma, "generar_estructurado", fake_gemini)
     monkeypatch.setattr(modulo_respuestas, "RUTA_RESPUESTAS", tmp_path / "respuestas.yaml")
     monkeypatch.setattr(imprenta, "CARPETA_SALIDAS", tmp_path / "salidas")
+    monkeypatch.setattr(historial, "RUTA_HISTORIAL", tmp_path / "historial_cv.json")
 
     grafo = batuta.construir_grafo_cv(InMemorySaver())
     return grafo, redacciones, tmp_path
@@ -191,3 +193,16 @@ def test_si_pluma_nunca_pasa_el_validador_usa_tus_bullets_originales(entorno):
     assert "Airflow" not in cv
     assert CV_EJEMPLO.proyectos[0].logros[0] in cv     # bullet original
     assert "no pasó el validador" in _texto_docx(estado["ruta_brechas"])
+
+
+def test_cada_adaptacion_crea_una_version_nueva_sin_pisar_la_anterior(entorno):
+    grafo, redacciones, _ = entorno
+    redacciones.append(REDACCION_LIMPIA)
+    r = batuta.iniciar_cv(42, grafo=grafo)
+    r1 = batuta.responder_cv(r["thread_id"], RESPUESTAS, grafo=grafo)["estado"]
+    r2 = batuta.iniciar_cv(42, grafo=grafo)["estado"]       # ya no pregunta
+
+    assert r1["ruta_cv"] != r2["ruta_cv"]
+    versiones = historial.versiones(42)
+    assert [v["version"] for v in versiones] == [2, 1]
+    assert all(v["usa_texto_de_pluma"] for v in versiones)

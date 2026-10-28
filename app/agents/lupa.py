@@ -14,6 +14,7 @@ from app.cleaner import clean_html, normalize_whitespace
 from app.gemini import extract_job_info
 from app.repository import buscar_job_por_url
 from app.scraper import fetch_html
+from app.source_resolver import canonicalizar_url
 from app.agents.estado import OfertaState
 
 # Por debajo de esto, el texto limpio es sospechosamente corto:
@@ -22,7 +23,8 @@ MIN_TEXTO_UTIL = 200
 
 
 def leer_oferta(state: OfertaState) -> OfertaState:
-    url = state.get("url")
+    # Misma oferta = mismo link, aunque llegue por la API o por el navegador.
+    url = canonicalizar_url(state.get("url"))
     texto = state.get("text")
 
     if texto and not url:

@@ -16,11 +16,11 @@ Postular bien a una oferta toma tiempo: leerla, ver qué piden, compararlo con l
 
 | Módulo | Qué hace |
 |---|---|
-| **Analizar oferta** | Pegas el texto (y opcionalmente el link) o una URL. Extrae puesto, empresa, área, inglés y cada tecnología con su tipo (obligatoria o deseable), su nivel y la frase de la oferta que lo respalda. |
+| **Analizar oferta** | Pegas el texto (y opcionalmente el link), una URL, o la envías desde el navegador con el marcador "Enviar a Job-Intelligence". Extrae puesto, empresa, área, inglés y cada tecnología con su tipo (obligatoria o deseable), su nivel y la frase de la oferta que lo respalda. |
 | **Match Score** | Compara la oferta con tu perfil y da un puntaje de 0 a 100, junto con lo que te falta y lo que tienes en un nivel menor al pedido. |
 | **Adaptar CV** | Te pregunta por lo que falta, reescribe tu CV con el vocabulario de la oferta y genera dos Word: el **CV listo para enviar** y un **informe de brechas** con qué estudiar y cómo abordarlo en la entrevista. |
 | **Bandeja** | Ofertas nuevas que se buscaron solas en Get on Board, ordenadas por Match Score. |
-| **Postulaciones** | Estado de cada oferta (Postulada, Entrevista…) con su historial. |
+| **Postulaciones** | Estado de cada oferta (Postulada, Entrevista…) con su historial, y **cada versión del CV generada**: al postular queda marcada cuál enviaste, para saber qué tiene la empresa si te llaman. |
 | **Qué estudiar** | Ranking de lo que te conviene aprender según tus ofertas, y un plan de estudio con un proyecto por tecnología. |
 | **Rutina diaria** | Todas las mañanas busca ofertas, arma un resumen y te avisa con una notificación de Windows. Los lunes actualiza el plan de estudio. |
 
@@ -144,7 +144,7 @@ Con mis 7 ofertas registradas, Brújula prioriza **metodologías ágiles** (obli
 
 ## Cómo se validó el sistema
 
-- **125 tests automatizados** (`pytest`), sin red, sin Gemini y sin base de datos: dependencias reemplazadas con `monkeypatch`, el checkpointer de LangGraph en memoria y las páginas de Streamlit probadas con `AppTest`.
+- **139 tests automatizados** (`pytest`), sin red, sin Gemini y sin base de datos: dependencias reemplazadas con `monkeypatch`, el checkpointer de LangGraph en memoria y las páginas de Streamlit probadas con `AppTest`.
 - **Pruebas reales** contra Supabase y Gemini: adaptación del CV para una oferta real, corridas de Sabueso sobre la API de Get on Board, el ranking de Brújula y la rutina diaria completa con su notificación.
 - Los DOCX generados se revisaron exportándolos a PDF.
 
@@ -162,12 +162,13 @@ copy .env.example .env         # y completa GEMINI_API_KEY y SUPABASE_DB_URL
 1. **Base de datos:** corre en orden `sql/schema_supabase_V1.sql`, `sql/001_revision_y_alias_empresa.sql` y `sql/002_fuente_getonbrd.sql`.
 2. **Tu CV:** copia `data/cv_base.example.yaml` como `data/cv_base.yaml` y complétalo. Pon todo lo que hayas hecho, aunque no quepa en una página: Pluma elige qué mostrar para cada oferta.
 3. **Tu perfil:** declara tus habilidades desde la página *Mi perfil* o con `python -m scripts.cargar_mi_perfil`.
-4. **La app:**
+4. **La app y la API:**
    ```bash
-   streamlit run streamlit_app.py
+   python -m scripts.iniciar
    ```
+   Abre la app en `http://localhost:8501` y la API en `http://localhost:8000`, que recibe las ofertas del marcador del navegador. Las instrucciones para instalar el marcador están en *Analizar oferta*.
 5. **Opcional:**
-   - API: `uvicorn app.main:app --reload` (`POST /analyze-job`).
+   - Solo la app: `streamlit run streamlit_app.py`.
    - Rutina diaria a mano: `python -m scripts.rutina_diaria`.
    - Programarla en Windows: `powershell -ExecutionPolicy Bypass -File scripts\programar_tarea.ps1`.
 6. **Tests:** `pytest`
@@ -178,15 +179,16 @@ copy .env.example .env         # y completa GEMINI_API_KEY y SUPABASE_DB_URL
 app/
   agents/      Batuta, Sabueso, Lupa, Archivero, Balanza, Preguntón, Pluma, Imprenta, Centinela, Brújula
   fuentes/     adaptadores de fuentes de ofertas (Get on Board)
-  cv/          modelo del CV base y respuestas del Preguntón
+  cv/          CV base, respuestas del Preguntón e historial de CVs enviados
   services.py  lo único que usan las interfaces
   consultas.py lecturas y cambios simples para la app
-  main.py      API FastAPI
+  main.py      API FastAPI (/analyze-job y /recibir, que usa el marcador del navegador)
+  pendientes.py ofertas enviadas desde el navegador, a la espera de revisión
 ui/            páginas de Streamlit
 config/        qué busca Sabueso
 sql/           esquema y migraciones
-scripts/       rutina diaria, tarea programada y pruebas manuales
-tests/         125 tests
+scripts/       iniciar (app + API), rutina diaria, tarea programada y pruebas manuales
+tests/         139 tests
 ```
 
 ## Stack
@@ -203,6 +205,5 @@ Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini (`google-genai`, stru
 ## Próximos pasos
 
 - Carta de presentación y preparación de entrevista con las mismas reglas de "no inventar".
-- Historial de qué versión del CV se envió a cada empresa.
 - Otro proveedor de LLM (otra API o un modelo local) como alternativa a Gemini.
 - Respaldo periódico de la base y CV en inglés para ofertas en inglés.

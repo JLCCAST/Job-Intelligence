@@ -229,3 +229,5 @@ data/respuestas.yaml
 data/*.sqlite*
 data/logs/
 data/brujula_plan.json
+data/historial_cv.json
+data/pendientes/

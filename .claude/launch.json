@@ -6,6 +6,12 @@
       "runtimeExecutable": "venv/Scripts/streamlit.exe",
       "runtimeArgs": ["run", "streamlit_app.py", "--server.headless", "true", "--server.port", "8501"],
       "port": 8501
+    },
+    {
+      "name": "job-intelligence-api",
+      "runtimeExecutable": "venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

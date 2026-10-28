@@ -13,7 +13,8 @@ El flujo de texto pegado (sin URL) NO usa este módulo; ahí la
 fuente la infiere Gemini desde el texto.
 """
 
-from urllib.parse import urlparse
+import re
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 from typing import Optional
 
 # Dominio registrable -> nombre EXACTO de la fila en la tabla `source`.
@@ -102,3 +103,36 @@ def resolver_source(
         return source_name_gemini
 
     return SOURCE_POR_DEFECTO_SIN_URL
+
+
+_GETONBRD_EMPLEOS = re.compile(r"^https?://(www\.)?getonbrd\.com/empleos/[^/]+/([^/?#]+)")
+
+
+def canonicalizar_url(url: Optional[str]) -> Optional[str]:
+    """
+    Una sola forma para la misma oferta, para que la detección de
+    duplicados funcione venga de donde venga:
+
+    - Get on Board: la API da `/jobs/<slug>` y el navegador termina en
+      `/empleos/<categoría>/<slug>` (redirección). Se usa `/jobs/<slug>`.
+    - Se quitan parámetros de seguimiento (`utm_*`, `trk`, `refId`...).
+    - Se quita el `#...`, salvo en Computrabajo, donde identifica la oferta.
+    """
+    if not url:
+        return url
+    url = url.strip()
+    m = _GETONBRD_EMPLEOS.match(url)
+    if m:
+        return f"https://www.getonbrd.com/jobs/{m.group(2)}"
+
+    partes = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(partes.query, keep_blank_values=True)
+             if not k.lower().startswith("utm_") and k not in _PARAMS_SEGUIMIENTO]
+    # Computrabajo muestra la oferta elegida de una lista de resultados
+    # solo con el fragmento (`/trabajo-de-...#<id>`): ahí el `#` ES la
+    # oferta, y borrarlo haría que todas parezcan la misma.
+    fragmento = partes.fragment if "computrabajo." in partes.netloc.lower() else ""
+    return urlunsplit((partes.scheme, partes.netloc, partes.path.rstrip("/"), urlencode(query), fragmento))
+
+
+_PARAMS_SEGUIMIENTO = {"trk", "trackingId", "refId", "ref", "src", "origin"}

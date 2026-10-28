@@ -24,6 +24,7 @@ from app.cv.cargador import RAIZ
 from app.fuentes import OfertaEncontrada, getonbrd
 from app.gemini import es_cuota_diaria_agotada
 from app.repository import buscar_job_por_url
+from app.source_resolver import canonicalizar_url
 
 RUTA_CONFIG = RAIZ / "config" / "sabueso.yaml"
 FUENTES = {"getonbrd": getonbrd.buscar}
@@ -97,7 +98,7 @@ def buscar_candidatas(config: dict, resultado: ResultadoSabueso) -> list[OfertaE
             config.get("palabras_clave_titulo", []), config.get("palabras_excluidas_titulo", []),
         ):
             resultado.fuera_de_filtro += 1
-        elif buscar_job_por_url(oferta.url) is not None:
+        elif buscar_job_por_url(canonicalizar_url(oferta.url)) is not None:
             resultado.ya_registradas += 1
         else:
             candidatas.append(oferta)

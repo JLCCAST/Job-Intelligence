@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 from app import services
 from ui.comun import encabezado, escribir, etiqueta_oferta, leer
+
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 encabezado("Postulaciones", "El estado de cada oferta y su historial.", seccion="Ofertas")
 
@@ -71,6 +75,27 @@ if historial:
             "nota": "Nota",
         },
     )
+
+st.subheader("CVs generados para esta oferta")
+versiones = services.versiones_cv(job_id)
+if not versiones:
+    st.caption("Todavía no adaptaste tu CV a esta oferta.")
+for v in versiones:
+    cv = Path(v["ruta_cv"])
+    with st.container(border=True, horizontal=True, vertical_alignment="center"):
+        fecha = v["fecha"].replace("T", " ")[:16]
+        st.markdown(f"**Versión {v['version']}** · {fecha}")
+        if v["enviado"]:
+            st.badge(f"Enviado el {v['fecha_envio'][:10]}", color="green", icon=":material/send:")
+        if not v["usa_texto_de_pluma"]:
+            st.badge("Textos originales", color="gray", help="El texto de Pluma no pasó el validador")
+        if cv.exists():
+            st.download_button("Descargar CV", cv.read_bytes(), file_name=cv.name, mime=DOCX,
+                               key=f"cv_v{v['version']}", icon=":material/download:")
+        else:
+            st.caption("El archivo ya no está en tu PC")
+if versiones and not any(v["enviado"] for v in versiones):
+    st.caption("Al marcar la oferta como «Postulada», la última versión queda registrada como la enviada.")
 
 if st.button("Adaptar mi CV a esta oferta", icon=":material/description:"):
     st.session_state["job_para_cv"] = job_id

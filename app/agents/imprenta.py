@@ -13,6 +13,7 @@ documento de brechas explica por qué.
 """
 
 import re
+from datetime import datetime
 import unicodedata
 from pathlib import Path
 from typing import Optional
@@ -25,6 +26,7 @@ from docx.oxml.ns import qn
 from docx.shared import Emu, Pt, RGBColor
 
 from app.agents.estado import CVState
+from app.cv import historial
 from app.cv.cargador import RAIZ, cargar_cv_base
 from app.cv.modelo import CVBase
 
@@ -359,9 +361,22 @@ def generar_brechas(cv: CVBase, state: CVState, carpeta: Path) -> Path:
 
 
 def imprimir(state: CVState) -> CVState:
-    carpeta = CARPETA_SALIDAS
+    """
+    Cada adaptación queda en su propia carpeta y en el historial, sin
+    pisar las anteriores: salidas/cv/job_<id>/v<n>_<fecha>/CV_....docx
+    (el nombre del archivo se mantiene limpio para enviarlo tal cual).
+    """
+    oferta = state["oferta"]
+    version = 1 + len(historial.versiones(oferta["job_id"]))
+    carpeta = (
+        CARPETA_SALIDAS / "cv" / f"job_{oferta['job_id']}"
+        / f"v{version}_{datetime.now():%Y-%m-%d_%H%M}"
+    )
     cv = cargar_cv_base()
-    return {
-        "ruta_cv": str(generar_cv(cv, state, carpeta)),
-        "ruta_brechas": str(generar_brechas(cv, state, carpeta)),
-    }
+    ruta_cv = str(generar_cv(cv, state, carpeta))
+    ruta_brechas = str(generar_brechas(cv, state, carpeta))
+    historial.registrar(
+        oferta["job_id"], oferta["puesto"], oferta.get("empresa"), ruta_cv, ruta_brechas,
+        usa_texto_de_pluma=bool(state.get("redaccion")) and not state.get("violaciones"),
+    )
+    return {"ruta_cv": ruta_cv, "ruta_brechas": ruta_brechas}

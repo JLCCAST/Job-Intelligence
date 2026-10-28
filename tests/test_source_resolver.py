@@ -76,3 +76,30 @@ def test_sin_url_y_gemini_no_especificado_cae_a_otro():
 
 def test_sin_url_y_sin_dato_de_gemini_cae_a_otro():
     assert resolver_source(url=None, source_name_gemini=None) == "Otro"
+
+
+def test_canonicalizar_unifica_las_urls_de_get_on_board():
+    from app.source_resolver import canonicalizar_url
+
+    api = "https://www.getonbrd.com/jobs/data-analyst-colectivo23-lima"
+    navegador = "https://www.getonbrd.com/empleos/data-science-analytics/data-analyst-colectivo23-lima"
+    assert canonicalizar_url(navegador) == api
+    assert canonicalizar_url(api) == api
+
+
+def test_canonicalizar_quita_parametros_de_seguimiento_y_barra_final():
+    from app.source_resolver import canonicalizar_url
+
+    url = "https://www.linkedin.com/jobs/view/123/?trk=public&utm_source=x&currentJobId=123"
+    assert canonicalizar_url(url) == "https://www.linkedin.com/jobs/view/123?currentJobId=123"
+    assert canonicalizar_url(None) is None
+
+
+def test_computrabajo_conserva_el_id_de_la_oferta_en_listas_de_resultados():
+    from app.source_resolver import canonicalizar_url
+
+    a = "https://pe.computrabajo.com/trabajo-de-practicante-analitica#7539C28879C5B12A61373E686DCF3405"
+    b = "https://pe.computrabajo.com/trabajo-de-practicante-analitica#11111111111111111111111111111111"
+    assert canonicalizar_url(a) == a
+    assert canonicalizar_url(a) != canonicalizar_url(b)
+    assert canonicalizar_url("https://www.linkedin.com/jobs/view/1#seccion") == "https://www.linkedin.com/jobs/view/1"
