@@ -17,7 +17,7 @@ def test_recibir_guarda_la_oferta_y_redirige_a_analizar(monkeypatch, tmp_path):
     )
     assert r.status_code == 303
     destino = r.headers["location"]
-    assert destino.startswith("http://localhost:8501/analizar?pendiente=")
+    assert destino.startswith("/analizar?pendiente=")
 
     id_ = destino.split("=")[-1]
     oferta = pendientes.tomar(id_)

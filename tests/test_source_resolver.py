@@ -91,7 +91,9 @@ def test_canonicalizar_quita_parametros_de_seguimiento_y_barra_final():
     from app.source_resolver import canonicalizar_url
 
     url = "https://www.linkedin.com/jobs/view/123/?trk=public&utm_source=x&currentJobId=123"
-    assert canonicalizar_url(url) == "https://www.linkedin.com/jobs/view/123?currentJobId=123"
+    assert canonicalizar_url(url) == "https://www.linkedin.com/jobs/view/123"
+    otro = "https://www.empresa.com/empleos/1/?utm_source=x&id=7"
+    assert canonicalizar_url(otro) == "https://www.empresa.com/empleos/1?id=7"
     assert canonicalizar_url(None) is None
 
 
@@ -103,3 +105,13 @@ def test_computrabajo_conserva_el_id_de_la_oferta_en_listas_de_resultados():
     assert canonicalizar_url(a) == a
     assert canonicalizar_url(a) != canonicalizar_url(b)
     assert canonicalizar_url("https://www.linkedin.com/jobs/view/1#seccion") == "https://www.linkedin.com/jobs/view/1"
+
+
+def test_linkedin_queda_en_su_link_estable():
+    from app.source_resolver import canonicalizar_url
+
+    estable = "https://www.linkedin.com/jobs/view/4012345678"
+    assert canonicalizar_url("https://www.linkedin.com/jobs/search/?currentJobId=4012345678&keywords=data") == estable
+    assert canonicalizar_url("https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4012345678") == estable
+    assert canonicalizar_url("https://pe.linkedin.com/jobs/view/analista-de-datos-at-empresa-4012345678?trk=x") == estable
+    assert canonicalizar_url(estable + "/") == estable

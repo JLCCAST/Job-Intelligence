@@ -1,25 +1,29 @@
 """
-Levanta todo lo que la app necesita con un solo comando:
+Abre Job-Intelligence con un solo comando:
 
     python -m scripts.iniciar
 
-    - API (FastAPI) en http://localhost:8000  -> recibe las ofertas del marcador
-    - App (Streamlit) en http://localhost:8501 -> se abre sola en el navegador
+Levanta el servidor en http://localhost:8000, que sirve la app (React,
+ya compilada), la API y el endpoint del marcador del navegador. Si el
+frontend cambió desde la última compilación, lo compila antes (necesita
+Node.js; la primera vez también instala sus dependencias).
 
-Si alguna ya está corriendo (por ejemplo, abriste la app antes con
-`streamlit run`), la reutiliza y solo levanta lo que falta.
-Ctrl + C cierra lo que este comando abrió.
+Ctrl + C lo cierra.
 """
 
+import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
+import webbrowser
 
 from app.cv.cargador import RAIZ
 
-PUERTO_API = 8000
-PUERTO_APP = 8501
+PUERTO = 8000
+WEB = RAIZ / "web"
+DIST = WEB / "dist" / "index.html"
 
 
 def puerto_ocupado(puerto: int) -> bool:
@@ -28,42 +32,50 @@ def puerto_ocupado(puerto: int) -> bool:
         return s.connect_ex(("127.0.0.1", puerto)) == 0
 
 
+def frontend_desactualizado() -> bool:
+    if not DIST.exists():
+        return True
+    compilado = DIST.stat().st_mtime
+    fuentes = [WEB / "index.html", WEB / "package.json", *(WEB / "src").rglob("*")]
+    return any(f.is_file() and f.stat().st_mtime > compilado for f in fuentes)
+
+
+def compilar_frontend() -> bool:
+    npm = shutil.which("npm")
+    if npm is None:
+        print("No encontré npm (Node.js). Instálalo desde nodejs.org para compilar el frontend.")
+        return DIST.exists()
+    if not (WEB / "node_modules").is_dir():
+        print("Instalando dependencias del frontend (solo la primera vez)...")
+        subprocess.run([npm, "install", "--no-audit", "--no-fund"], cwd=WEB, check=True)
+    print("Compilando el frontend...")
+    subprocess.run([npm, "run", "build"], cwd=WEB, check=True)
+    return True
+
+
 def main() -> int:
-    python = sys.executable
-    procesos = []
-
-    if puerto_ocupado(PUERTO_API):
-        print(f"API: ya estaba corriendo en http://localhost:{PUERTO_API}")
-    else:
-        procesos.append(subprocess.Popen(
-            [python, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(PUERTO_API)],
-            cwd=RAIZ,
-        ))
-        print(f"API: iniciada en http://localhost:{PUERTO_API}")
-
-    if puerto_ocupado(PUERTO_APP):
-        print(f"App: ya estaba abierta en http://localhost:{PUERTO_APP} (la reutilizo)")
-    else:
-        procesos.append(subprocess.Popen(
-            [python, "-m", "streamlit", "run", "streamlit_app.py", "--server.port", str(PUERTO_APP)],
-            cwd=RAIZ,
-        ))
-        print(f"App: iniciada en http://localhost:{PUERTO_APP}")
-
-    if not procesos:
-        print("Todo ya estaba corriendo. No hay nada que iniciar.")
+    url = f"http://localhost:{PUERTO}"
+    if puerto_ocupado(PUERTO):
+        print(f"Job-Intelligence ya está corriendo en {url}")
+        webbrowser.open(url)
         return 0
 
-    print("Ctrl + C para cerrar lo que se inició aquí.")
+    if frontend_desactualizado() and not compilar_frontend():
+        return 1
+
+    servidor = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(PUERTO)],
+        cwd=RAIZ,
+    )
+    # Abre el navegador cuando el servidor ya responde.
+    threading.Thread(
+        target=lambda: (time.sleep(2.5), webbrowser.open(url)), daemon=True,
+    ).start()
+    print(f"Job-Intelligence en {url}  (Ctrl + C para cerrar)")
     try:
-        while all(p.poll() is None for p in procesos):
-            time.sleep(1)
+        servidor.wait()
     except KeyboardInterrupt:
-        pass
-    finally:
-        for proceso in procesos:
-            if proceso.poll() is None:
-                proceso.terminate()
+        servidor.terminate()
     return 0
 
 

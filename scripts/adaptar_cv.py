@@ -1,6 +1,6 @@
 """
-Adapta tu CV a una oferta ya registrada, desde la consola (hasta
-que exista la app de Streamlit). Usa Supabase y Gemini REALES.
+Adapta tu CV a una oferta ya registrada, desde la consola (lo mismo
+que «Adaptar CV» en la app). Usa Supabase y Gemini REALES.
 
     python -m scripts.adaptar_cv            -> lista tus ofertas
     python -m scripts.adaptar_cv <job_id>   -> adapta el CV a esa oferta

@@ -20,7 +20,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
-from app.agents import archivero, balanza, imprenta, lupa, pluma, pregunton
+from app.agents import archivero, balanza, eventos, imprenta, lupa, pluma, pregunton
 from app.agents.estado import CVState, OfertaState
 from app.cv.cargador import RAIZ
 
@@ -136,3 +136,33 @@ def responder_cv(thread_id: str, respuestas: list[dict], grafo=None) -> dict:
     grafo = grafo or _obtener_grafo_cv()
     grafo.invoke(Command(resume=respuestas), {"configurable": {"thread_id": thread_id}})
     return _resumen(grafo, thread_id)
+
+
+# ==============================================================
+# Versiones "en vivo": los mismos flujos, pero entregando un evento
+# cada vez que un agente empieza o termina (ver eventos.py).
+# ==============================================================
+
+def analizar_en_vivo(url: Optional[str] = None, text: Optional[str] = None, origen: Optional[str] = None):
+    global _grafo
+    if _grafo is None:
+        _grafo = construir_grafo()
+    yield from eventos.transmitir(_grafo, {"url": url, "text": text, "origen": origen}, flujo="oferta")
+
+
+def iniciar_cv_en_vivo(job_id: int, grafo=None):
+    grafo = grafo or _obtener_grafo_cv()
+    thread_id = f"cv-{job_id}-{uuid.uuid4().hex[:8]}"
+    for ev in eventos.transmitir(grafo, {"job_id": job_id}, {"configurable": {"thread_id": thread_id}}, flujo="cv"):
+        if ev["tipo"] != "_estado":
+            yield ev
+    yield {"tipo": "_resumen", "resumen": _resumen(grafo, thread_id)}
+
+
+def responder_cv_en_vivo(thread_id: str, respuestas: list[dict], grafo=None):
+    grafo = grafo or _obtener_grafo_cv()
+    config = {"configurable": {"thread_id": thread_id}}
+    for ev in eventos.transmitir(grafo, Command(resume=respuestas), config, flujo="cv"):
+        if ev["tipo"] != "_estado":
+            yield ev
+    yield {"tipo": "_resumen", "resumen": _resumen(grafo, thread_id)}

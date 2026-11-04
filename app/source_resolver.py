@@ -105,6 +105,7 @@ def resolver_source(
     return SOURCE_POR_DEFECTO_SIN_URL
 
 
+_LINKEDIN_VISTA = re.compile(r"^/jobs/view/(?:[^/]*-)?(\d+)")
 _GETONBRD_EMPLEOS = re.compile(r"^https?://(www\.)?getonbrd\.com/empleos/[^/]+/([^/?#]+)")
 
 
@@ -116,6 +117,7 @@ def canonicalizar_url(url: Optional[str]) -> Optional[str]:
     - Get on Board: la API da `/jobs/<slug>` y el navegador termina en
       `/empleos/<categoría>/<slug>` (redirección). Se usa `/jobs/<slug>`.
     - Se quitan parámetros de seguimiento (`utm_*`, `trk`, `refId`...).
+    - LinkedIn: `?currentJobId=<id>` o `/jobs/view/<titulo>-<id>` pasan a `/jobs/view/<id>`.
     - Se quita el `#...`, salvo en Computrabajo, donde identifica la oferta.
     """
     if not url:
@@ -124,6 +126,17 @@ def canonicalizar_url(url: Optional[str]) -> Optional[str]:
     m = _GETONBRD_EMPLEOS.match(url)
     if m:
         return f"https://www.getonbrd.com/jobs/{m.group(2)}"
+
+    # LinkedIn: desde la búsqueda o las recomendaciones la oferta abierta
+    # va en ?currentJobId=<id>; su link estable es /jobs/view/<id>.
+    partes = urlsplit(url)
+    if partes.netloc.lower().endswith("linkedin.com"):
+        job_id = dict(parse_qsl(partes.query)).get("currentJobId")
+        m_vista = _LINKEDIN_VISTA.match(partes.path)
+        if job_id and job_id.isdigit():
+            return f"https://www.linkedin.com/jobs/view/{job_id}"
+        if m_vista:
+            return f"https://www.linkedin.com/jobs/view/{m_vista.group(1)}"
 
     partes = urlsplit(url)
     query = [(k, v) for k, v in parse_qsl(partes.query, keep_blank_values=True)

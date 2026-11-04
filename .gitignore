@@ -215,8 +215,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Streamlit
-.streamlit/secrets.toml
 
 # Archivos de Power BI (pueden contener datos y la conexión a la BD)
 BI/
@@ -231,3 +229,8 @@ data/logs/
 data/brujula_plan.json
 data/historial_cv.json
 data/pendientes/
+
+# Frontend React
+web/node_modules/
+web/dist/
+data/actividad.jsonl

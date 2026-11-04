@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* Modo oscuro por clase (lo controla el botón de tema, con el sistema como valor inicial). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Tokens de color. Estilo sobrio de herramienta de trabajo: grises
+  neutros, un solo azul de acento, bordes finos en vez de sombras y
+  esquinas casi rectas. Claro y oscuro están definidos aparte.
+*/
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --border: #e4e4e7;
+  --text: #18181b;
+  --text-2: #52525b;
+  --text-3: #a1a1aa;
+  --primary: #1f5fbf;
+  --primary-hover: #194f9f;
+  --primary-soft: #eef3fb;
+  --accent: #c2410c;
+  --sidebar: #f4f4f5;
+  --sidebar-2: #e4e4e7;
+  --sidebar-text: #3f3f46;
+  --ok: #15803d;
+  --ok-soft: #f0f7f2;
+  --warn: #a16207;
+  --warn-soft: #fbf6ea;
+  --bad: #b91c1c;
+  --bad-soft: #fbefef;
+  --shadow: none;
+}
+
+.dark {
+  --bg: #0c0c0e;
+  --surface: #141416;
+  --surface-2: #1c1c1f;
+  --border: #2a2a2e;
+  --text: #ececee;
+  --text-2: #a1a1aa;
+  --text-3: #71717a;
+  --primary: #5b8fdd;
+  --primary-hover: #7aa5e6;
+  --primary-soft: #18202c;
+  --accent: #ea7a45;
+  --sidebar: #111113;
+  --sidebar-2: #1f1f22;
+  --sidebar-text: #c4c4c9;
+  --ok: #4ade80;
+  --ok-soft: #13201a;
+  --warn: #e3b34f;
+  --warn-soft: #221d12;
+  --bad: #f08a8a;
+  --bad-soft: #251416;
+  --shadow: none;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-2);
+  --color-ink-3: var(--text-3);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-2: var(--sidebar-2);
+  --color-sidebar-ink: var(--sidebar-text);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --shadow-card: var(--shadow);
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aparecer {
+    animation: aparecer 0.25s ease-out both;
+  }
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,7 +1,7 @@
 """
 consultas.py
 
-Lecturas y cambios simples que necesita la app (Streamlit): listar
+Lecturas y cambios simples que necesita la app: listar
 ofertas, cambiar su estado, ver y editar tu perfil, revisar el
 catálogo. repository.py se queda con el flujo de registrar una
 oferta; aquí va todo lo demás.

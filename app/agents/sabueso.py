@@ -136,4 +136,12 @@ def ejecutar(config: dict = None) -> ResultadoSabueso:
             motivo = estado.get("error_detail") or estado.get("registration_status")
             resultado.descartadas.append(f"{oferta.titulo}: {motivo}")
 
+    from app.agents import eventos
+    eventos.registrar(
+        "sabueso",
+        f"Revisé {resultado.encontradas} ofertas: registré {len(resultado.registradas)}, "
+        f"{resultado.ya_registradas} ya estaban y {resultado.fuera_de_filtro} no pasaron el filtro.",
+        "error" if resultado.errores and not resultado.registradas else "ok",
+        "rutina",
+    )
     return resultado

@@ -66,6 +66,13 @@ def main() -> int:
 
     ruta = centinela.guardar_resumen(centinela.resumen_markdown(resumen, resultado_sabueso), resumen["fecha"])
     log.info("Centinela: resumen guardado en %s", ruta)
+    from app.agents import eventos
+    eventos.registrar(
+        "centinela",
+        f"Resumen del día: {len(resumen['nuevas'])} ofertas nuevas y "
+        f"{len(resumen['recordatorios'])} postulaciones para hacer seguimiento.",
+        "ok", "rutina",
+    )
 
     titulo, cuerpo = centinela.texto_notificacion(resumen)
 

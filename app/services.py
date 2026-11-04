@@ -1,8 +1,8 @@
 """
 services.py
 
-Capa de servicios: lo que la interfaz (FastAPI hoy, Streamlit
-después, un frontend HTML más adelante) puede pedirle al sistema.
+Capa de servicios: lo que la interfaz (la API de app/api.py, que usa
+el frontend React) puede pedirle al sistema.
 Ninguna interfaz llama directo a los agentes: siempre pasa por acá,
 así cambiar de interfaz no toca la lógica.
 """
@@ -47,13 +47,73 @@ def versiones_cv(job_id: int) -> list[dict]:
     return historial.versiones(job_id)
 
 
-def analizar_oferta(url: Optional[str] = None, text: Optional[str] = None) -> AnalyzeJobResponse:
-    estado = batuta.analizar(url=url, text=text)
-
+def _respuesta_analisis(estado: dict) -> AnalyzeJobResponse:
     # Las claves del estado se llaman igual que los campos de la
     # respuesta; las de control (url, text, terminado) se descartan.
     campos = AnalyzeJobResponse.model_fields
     return AnalyzeJobResponse(**{k: v for k, v in estado.items() if k in campos})
+
+
+def analizar_oferta(url: Optional[str] = None, text: Optional[str] = None) -> AnalyzeJobResponse:
+    return _respuesta_analisis(batuta.analizar(url=url, text=text))
+
+
+# --------------------------------------------------------------
+# Versiones en vivo (para la línea de agentes de la interfaz)
+# --------------------------------------------------------------
+# Entregan eventos {"tipo": "inicio" | "fin", "agente", ...} mientras
+# los agentes trabajan, y al final {"tipo": "resultado", "datos": ...}
+# con lo mismo que devolvería la versión normal. Batuta abre y cierra
+# la transmisión: es quien coordina.
+
+def _en_vivo(eventos_flujo, armar_resultado, accion: str):
+    from time import perf_counter
+
+    from app.agents import eventos
+
+    inicio = perf_counter()
+    yield {"tipo": "inicio", "nodo": "batuta", "agente": "batuta", "accion": accion}
+    try:
+        for ev in eventos_flujo:
+            if ev["tipo"] in ("_estado", "_resumen"):
+                resultado = armar_resultado(ev)
+                continue
+            yield ev
+    except Exception as exc:  # la interfaz muestra el error en la línea de agentes
+        yield {"tipo": "fin", "nodo": "batuta", "agente": "batuta", "estado": "error",
+               "resumen": f"El flujo se detuvo: {str(exc)[:200]}", "ms": int((perf_counter() - inicio) * 1000)}
+        yield {"tipo": "error", "mensaje": str(exc)[:300]}
+        return
+    ms = int((perf_counter() - inicio) * 1000)
+    pausa = isinstance(resultado, dict) and resultado.get("esperando_respuestas")
+    resumen = "Flujo en pausa: espero tus respuestas." if pausa else f"Flujo completo en {ms / 1000:.1f} s."
+    eventos.registrar("batuta", resumen, "pausa" if pausa else "ok", "")
+    yield {"tipo": "fin", "nodo": "batuta", "agente": "batuta", "estado": "pausa" if pausa else "ok", "resumen": resumen, "ms": ms}
+    yield {"tipo": "resultado", "datos": resultado}
+
+
+def analizar_oferta_en_vivo(url: Optional[str] = None, text: Optional[str] = None):
+    return _en_vivo(
+        batuta.analizar_en_vivo(url=url, text=text),
+        lambda ev: _respuesta_analisis(ev["estado"]).model_dump(mode="json"),
+        "Organizando el análisis de la oferta",
+    )
+
+
+def iniciar_adaptacion_cv_en_vivo(job_id: int):
+    return _en_vivo(
+        batuta.iniciar_cv_en_vivo(job_id),
+        lambda ev: _resultado_cv(ev["resumen"]),
+        "Organizando la adaptación de tu CV",
+    )
+
+
+def responder_preguntas_en_vivo(thread_id: str, respuestas: list[dict]):
+    return _en_vivo(
+        batuta.responder_cv_en_vivo(thread_id, respuestas),
+        lambda ev: _resultado_cv(ev["resumen"]),
+        "Retomando la adaptación con tus respuestas",
+    )
 
 
 # --------------------------------------------------------------
@@ -126,6 +186,13 @@ def generar_plan_estudio() -> dict:
     plan, error = brujula.generar_plan(top, skills_base)
     if plan is not None:
         brujula.guardar_plan(plan, top)
+    from app.agents import eventos
+    eventos.registrar(
+        "brujula",
+        f"Armé tu plan de estudio para {', '.join(i.tecnologia for i in plan.items)}." if plan
+        else f"No pude armar el plan: {(error or '')[:120]}",
+        "ok" if plan else "error", "rutina",
+    )
     return {"plan": brujula.cargar_plan() if plan else None, "error": error}
 
 

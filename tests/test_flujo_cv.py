@@ -10,7 +10,7 @@ import pytest
 from docx import Document
 from langgraph.checkpoint.memory import InMemorySaver
 
-from app.agents import balanza, batuta, imprenta, pluma, pregunton
+from app.agents import balanza, batuta, eventos, imprenta, pluma, pregunton
 from app.cv import historial
 from app.cv import respuestas as modulo_respuestas
 from app.cv.cargador import RAIZ, cargar_cv_base
@@ -130,6 +130,7 @@ def entorno(monkeypatch, tmp_path):
     monkeypatch.setattr(modulo_respuestas, "RUTA_RESPUESTAS", tmp_path / "respuestas.yaml")
     monkeypatch.setattr(imprenta, "CARPETA_SALIDAS", tmp_path / "salidas")
     monkeypatch.setattr(historial, "RUTA_HISTORIAL", tmp_path / "historial_cv.json")
+    monkeypatch.setattr(eventos, "RUTA_ACTIVIDAD", tmp_path / "actividad.jsonl")
 
     grafo = batuta.construir_grafo_cv(InMemorySaver())
     return grafo, redacciones, tmp_path
@@ -206,3 +207,27 @@ def test_cada_adaptacion_crea_una_version_nueva_sin_pisar_la_anterior(entorno):
     versiones = historial.versiones(42)
     assert [v["version"] for v in versiones] == [2, 1]
     assert all(v["usa_texto_de_pluma"] for v in versiones)
+
+
+def test_en_vivo_se_ve_cada_agente_la_pausa_y_el_rechazo_del_validador(entorno):
+    grafo, redacciones, _ = entorno
+    redacciones += [REDACCION_CON_AIRFLOW, REDACCION_LIMPIA]
+
+    primera = list(batuta.iniciar_cv_en_vivo(42, grafo=grafo))
+    fines = [e for e in primera if e["tipo"] == "fin"]
+    assert [e["agente"] for e in fines] == ["balanza", "pregunton"]
+    assert fines[-1]["estado"] == "pausa" and "2 preguntas" in fines[-1]["resumen"]
+    resumen = primera[-1]["resumen"]
+    assert primera[-1]["tipo"] == "_resumen" and resumen["esperando_respuestas"]
+
+    segunda = list(batuta.responder_cv_en_vivo(resumen["thread_id"], RESPUESTAS, grafo=grafo))
+    pasos = [(e["agente"], e["estado"]) for e in segunda if e["tipo"] == "fin"]
+    assert pasos == [
+        ("pregunton", "ok"), ("pluma", "ok"), ("pluma", "ok"),
+        ("validador", "rechazo"),      # Pluma inventó Airflow: se ve el rechazo
+        ("pluma", "ok"), ("validador", "ok"), ("imprenta", "ok"),
+    ]
+    # Cada "fin" viene después de su "inicio".
+    tipos = [(e["tipo"], e["nodo"]) for e in segunda if e["tipo"] in ("inicio", "fin")]
+    assert tipos[0] == ("inicio", "pregunton") and tipos[1] == ("fin", "pregunton")
+    assert len(eventos.actividad_reciente()) == len([e for e in primera + segunda if e["tipo"] == "fin"])

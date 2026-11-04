@@ -2,7 +2,7 @@
 
 Asistente personal de búsqueda de empleo para perfiles de datos en Perú. Busca ofertas en fuentes que lo permiten, extrae sus requisitos con Gemini, calcula qué tanto encajas, adapta tu CV **sin inventar nada** y te dice qué estudiar primero.
 
-Está construido como un sistema de **agentes con una sola tarea cada uno**, orquestados con LangGraph, y corre en local con una app de Streamlit.
+Está construido como un sistema de **agentes con una sola tarea cada uno**, orquestados con LangGraph, y corre en local con una app web en React.
 
 > Proyecto personal de José Luis Chuque (Ing. de Sistemas, UNMSM). Lo uso en mi propia búsqueda de prácticas en datos.
 
@@ -22,6 +22,7 @@ Postular bien a una oferta toma tiempo: leerla, ver qué piden, compararlo con l
 | **Bandeja** | Ofertas nuevas que se buscaron solas en Get on Board, ordenadas por Match Score. |
 | **Postulaciones** | Estado de cada oferta (Postulada, Entrevista…) con su historial, y **cada versión del CV generada**: al postular queda marcada cuál enviaste, para saber qué tiene la empresa si te llaman. |
 | **Qué estudiar** | Ranking de lo que te conviene aprender según tus ofertas, y un plan de estudio con un proyecto por tecnología. |
+| **Agentes en vivo** | Al analizar una oferta o adaptar el CV, ves a cada agente trabajar en tiempo real: cuándo empieza, qué hizo y cuánto tardó (Lupa extrae, Validador rechaza y Pluma corrige…). La página *Agentes* muestra el equipo, los flujos y su actividad reciente. Son los eventos reales de LangGraph transmitidos con Server-Sent Events, no una animación. |
 | **Rutina diaria** | Todas las mañanas busca ofertas, arma un resumen y te avisa con una notificación de Windows. Los lunes actualiza el plan de estudio. |
 
 ## Arquitectura
@@ -64,7 +65,7 @@ flowchart LR
 | **Centinela** | Resumen diario, recordatorios de seguimiento y notificación de Windows | No |
 | **Brújula** | Calcula qué estudiar primero; Gemini solo redacta el plan | Solo el plan |
 
-Las interfaces (FastAPI y Streamlit) solo llaman a `app/services.py`. Cambiar Streamlit por un frontend en HTML no toca los agentes.
+La interfaz (React) habla solo con la API REST de FastAPI, y la API solo llama a `app/services.py`. Por eso pasar de Streamlit a React no tocó los agentes ni sus tests.
 
 ## Decisiones de diseño
 
@@ -75,82 +76,9 @@ Las interfaces (FastAPI y Streamlit) solo llaman a `app/services.py`. Cambiar St
 - **Prioridad de estudio:** `demanda × distancia × tendencia`. La demanda mide cuántas ofertas la piden; la distancia, si te falta (1), si la tienes en un nivel menor (0.5) o si está en tu CV pero no en tu perfil (0.25). La tendencia compara los últimos 30 días con los 30 anteriores, y solo cuenta si cada periodo tiene al menos 5 ofertas.
 - **Datos personales fuera del repo:** el CV base, tus respuestas, los documentos generados y el `.env` están en `.gitignore`. El repo solo trae una plantilla con datos ficticios.
 
-## Hallazgos
-
-Cada hallazgo indica la pregunta, qué se encontró y cómo se comprobó. Datos tomados el **23/10/2026**.
-
-### 1. ¿Cuántas ofertas de datos para Perú hay en fuentes que permiten acceso automático?
-
-**Pocas.** De los portales grandes, solo **Get on Board** ofrece una API pública. LinkedIn e Indeed prohíben el scraping en sus términos, Computrabajo bloquea el acceso automático (responde 403) y Bumeran no tiene API.
-
-Con 5 búsquedas ("analista de datos", "data analyst", "business intelligence", "data engineer", "analytics"), Get on Board devolvió **152 ofertas únicas**:
-
-| Filtro | Ofertas |
-|---|---|
-| Total devuelto por la API | 152 |
-| Ubicadas en Perú | 4 (frente a 70 de Chile) |
-| 100% remotas | 72 |
-| Con título de datos | 52 |
-| … sin cargos senior o lead | 34 |
-| **Perú o remotas, de datos y no senior** | **9** |
-
-Además, **50 de las 152 (33%) publican rango salarial**, un dato que en otros portales casi nunca aparece.
-
-*Cómo se comprobó:* conteo directo sobre la respuesta de la API, con los mismos filtros que usa Sabueso (`config/sabueso.yaml`). Es una foto de un día, no una serie de tiempo.
-
-*Conclusión:* un análisis del "mercado laboral de datos en Perú" con fuentes permitidas no tendría muestra suficiente. Por eso el proyecto se enfocó en ayudarme a postular mejor a las ofertas que sí encuentro.
-
-### 2. ¿Se puede adaptar un CV con un LLM sin que invente?
-
-**Sí, con un validador y reglas explícitas; el prompt solo no basta.** En la primera prueba real (una oferta de practicante de BI), el texto de Gemini era fiel, pero tenía dos problemas que el validador no detectaba:
-
-- Escribía las tecnologías en minúsculas ("sql server", "power bi"), porque la lista permitida se le pasaba en minúsculas.
-- **Exageraba la participación:** "Participación en la revisión del proceso" pasó a "Revisé el proceso".
-
-Ambos se corrigieron con reglas en el prompt y se verificaron en la siguiente corrida: el texto pasó el validador al primer intento y conservó "Apoyé" y "Participé".
-
-*Cómo se comprobó:* tests con un Gemini falso que inventa una tecnología (Airflow) y una cifra (45%): el validador rechaza ambas, y si la falla persiste el CV sale con los textos originales. Además se revisó el PDF del CV real generado.
-
-### 3. ¿Alcanza el plan gratuito de Gemini?
-
-**Para uso personal sí, pero con un tope que obliga a diseñar alrededor de él:** el plan gratuito permite **20 peticiones al día** con `gemini-3.6-flash`. En la primera corrida de Sabueso, 7 de 8 ofertas fallaron por saturación (503) o por límite (429).
-
-El mensaje del error indica que el límite es **por proyecto y por modelo**, y el panel de cuotas de AI Studio lo confirma. Los modelos Flash tienen 20 peticiones al día, pero los **Flash Lite tienen 500**. Por eso cada agente usa sus propios modelos, en orden de preferencia, y si uno agota su cuota del día pasa al siguiente:
-
-| Agente | Modelos (principal, respaldo) | Peticiones gratuitas al día |
-|---|---|---|
-| Lupa (extracción, la de más volumen) | `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` | 500 + 500 |
-| Pluma (redacción del CV) | `gemini-3.6-flash`, `gemini-3-flash-preview` | 20 + 20 |
-| Brújula (plan semanal) | `gemini-3.8-flash`, `gemini-3.6-flash` | 20 (+ compartido) |
-
-Los modelos se cambian en el `.env`, sin tocar código.
-
-Antes de cambiar el modelo de Lupa se comprobó que extrajera bien. Sobre la misma oferta, el modelo lite encontró las **mismas 8 tecnologías**, con el mismo tipo (obligatoria o deseable), y el mismo título, empresa y área. Solo difirió en 2 niveles, en requisitos que la oferta da como rango ("SQL Intermedio-Avanzado", "Python básico o intermedio"): el lite tomó el extremo bajo y el modelo anterior el alto.
-
-Cambios que salieron de eso:
-- Modelos propios por agente, con respaldo, para repartir la cuota gratuita. Con eso el tope de Sabueso pasó de 8 a 30 ofertas por corrida.
-- Reintentos con espera solo para errores temporales.
-- 6 segundos de pausa entre ofertas.
-- Tope de 8 ofertas por día en Sabueso, para dejar margen al uso manual.
-- Si se agota la cuota diaria, Sabueso se detiene en lugar de seguir fallando.
-
-*Cómo se comprobó:* registro de la rutina (`data/logs/rutina.log`, con 11 respuestas 429 y 10 respuestas 503) y el mensaje de error de la API, que indica el límite exacto.
-
-### 4. ¿Qué me conviene estudiar?
-
-Con mis 7 ofertas registradas, Brújula prioriza **metodologías ágiles** (obligatoria en 2), **Power BI** y **Python** (los tengo, pero piden nivel avanzado) y **Tableau**.
-
-*Advertencia:* con 7 ofertas el ranking refleja *mis* ofertas, no el mercado, y la app lo dice. La tendencia aparece cuando hay al menos 5 ofertas en cada uno de los dos periodos de 30 días.
-
-## Cómo se validó el sistema
-
-- **139 tests automatizados** (`pytest`), sin red, sin Gemini y sin base de datos: dependencias reemplazadas con `monkeypatch`, el checkpointer de LangGraph en memoria y las páginas de Streamlit probadas con `AppTest`.
-- **Pruebas reales** contra Supabase y Gemini: adaptación del CV para una oferta real, corridas de Sabueso sobre la API de Get on Board, el ranking de Brújula y la rutina diaria completa con su notificación.
-- Los DOCX generados se revisaron exportándolos a PDF.
-
 ## Cómo correrlo
 
-**Requisitos:** Python 3.13, una base PostgreSQL (yo uso Supabase) y una API key de Gemini.
+**Requisitos:** Node.js 20+ (para compilar el frontend), Python 3.13, una base PostgreSQL (yo uso Supabase) y una API key de Gemini.
 
 ```bash
 python -m venv venv
@@ -162,13 +90,13 @@ copy .env.example .env         # y completa GEMINI_API_KEY y SUPABASE_DB_URL
 1. **Base de datos:** corre en orden `sql/schema_supabase_V1.sql`, `sql/001_revision_y_alias_empresa.sql` y `sql/002_fuente_getonbrd.sql`.
 2. **Tu CV:** copia `data/cv_base.example.yaml` como `data/cv_base.yaml` y complétalo. Pon todo lo que hayas hecho, aunque no quepa en una página: Pluma elige qué mostrar para cada oferta.
 3. **Tu perfil:** declara tus habilidades desde la página *Mi perfil* o con `python -m scripts.cargar_mi_perfil`.
-4. **La app y la API:**
+4. **La app:**
    ```bash
    python -m scripts.iniciar
    ```
-   Abre la app en `http://localhost:8501` y la API en `http://localhost:8000`, que recibe las ofertas del marcador del navegador. Las instrucciones para instalar el marcador están en *Analizar oferta*.
+   Abre `http://localhost:8000`: el mismo servidor sirve la app, la API y el endpoint del marcador del navegador. La primera vez compila el frontend (y después, cada vez que cambia). Las instrucciones para instalar el marcador están en *Analizar oferta*.
 5. **Opcional:**
-   - Solo la app: `streamlit run streamlit_app.py`.
+   - Desarrollar el frontend con recarga en vivo: `npm run dev` dentro de `web/` (abre `http://localhost:5173`; necesita el servidor de Python corriendo).
    - Rutina diaria a mano: `python -m scripts.rutina_diaria`.
    - Programarla en Windows: `powershell -ExecutionPolicy Bypass -File scripts\programar_tarea.ps1`.
 6. **Tests:** `pytest`
@@ -182,18 +110,20 @@ app/
   cv/          CV base, respuestas del Preguntón e historial de CVs enviados
   services.py  lo único que usan las interfaces
   consultas.py lecturas y cambios simples para la app
-  main.py      API FastAPI (/analyze-job y /recibir, que usa el marcador del navegador)
+  main.py      servidor: sirve la app (web/dist), /recibir del marcador y /analyze-job
+  api.py       API REST /api que usa el frontend
   pendientes.py ofertas enviadas desde el navegador, a la espera de revisión
-ui/            páginas de Streamlit
+web/           frontend: React + Vite + Tailwind + TanStack Query + Recharts
+  src/pages/   una página por sección (Inicio, Bandeja, Analizar, Postulaciones, Adaptar CV...)
 config/        qué busca Sabueso
 sql/           esquema y migraciones
 scripts/       iniciar (app + API), rutina diaria, tarea programada y pruebas manuales
-tests/         139 tests
+tests/         144 tests
 ```
 
 ## Stack
 
-Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini (`google-genai`, structured output) · Pydantic · PostgreSQL / Supabase (psycopg2) · Streamlit + Altair · FastAPI · python-docx · BeautifulSoup · pytest
+Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini (`google-genai`, structured output) · Pydantic · PostgreSQL / Supabase (psycopg2) · React + Vite + Tailwind CSS + Recharts · FastAPI · python-docx · BeautifulSoup · pytest
 
 ## Limitaciones
 
@@ -202,8 +132,3 @@ Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini (`google-genai`, stru
 - **Cuota de Gemini.** El plan gratuito tiene un tope diario por modelo, aunque repartirlo entre agentes lo alarga.
 - **Solo en local y para un usuario.** No tiene login; no está pensado para desplegarse así.
 
-## Próximos pasos
-
-- Carta de presentación y preparación de entrevista con las mismas reglas de "no inventar".
-- Otro proveedor de LLM (otra API o un modelo local) como alternativa a Gemini.
-- Respaldo periódico de la base y CV en inglés para ofertas en inglés.
