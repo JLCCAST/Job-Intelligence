@@ -87,9 +87,14 @@ pip install -r requirements.txt
 copy .env.example .env         # y completa GEMINI_API_KEY y SUPABASE_DB_URL
 ```
 
+De dónde sacar los dos valores del `.env` (ambos son gratuitos):
+- **`GEMINI_API_KEY`:** entra a [Google AI Studio](https://aistudio.google.com/apikey) con tu cuenta de Google y crea una API key. El plan gratuito alcanza para el uso diario.
+- **`SUPABASE_DB_URL`:** crea un proyecto en [Supabase](https://supabase.com), pulsa **Connect** arriba del panel y copia la cadena de conexión (*Session pooler*, empieza con `postgresql://`). Reemplaza `[YOUR-PASSWORD]` por la contraseña que elegiste al crear el proyecto. Los scripts SQL del paso 1 se pueden pegar y ejecutar en el **SQL Editor** de Supabase.
+
 1. **Base de datos:** corre en orden `sql/schema_supabase_V1.sql`, `sql/001_revision_y_alias_empresa.sql` y `sql/002_fuente_getonbrd.sql`.
 2. **Tu CV:** copia `data/cv_base.example.yaml` como `data/cv_base.yaml` y complétalo. Pon todo lo que hayas hecho, aunque no quepa en una página: Pluma elige qué mostrar para cada oferta.
 3. **Tu perfil:** declara tus habilidades desde la página *Mi perfil* o con `python -m scripts.cargar_mi_perfil`.
+   - **Qué ofertas busca Sabueso:** edita `config/sabueso.yaml`. Viene configurado para prácticas de datos en Perú; cambia `consultas` (qué se busca), `paises` (como los escribe Get on Board, por ejemplo `[Argentina]`), `incluir_remoto` y `palabras_clave_titulo` (palabras que debe tener el título) según los puestos que te interesen.
 4. **La app:**
    ```bash
    python -m scripts.iniciar
