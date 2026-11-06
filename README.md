@@ -137,3 +137,7 @@ Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini (`google-genai`, stru
 - **Cuota de Gemini.** El plan gratuito tiene un tope diario por modelo, aunque repartirlo entre agentes lo alarga.
 - **Solo en local y para un usuario.** No tiene login; no está pensado para desplegarse así.
 
+
+## Licencia
+
+[MIT](LICENSE): puedes usar, modificar y adaptar el código libremente, manteniendo el aviso de copyright.
