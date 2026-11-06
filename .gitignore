@@ -221,7 +221,8 @@ BI/
 *.pbix
 
 # Datos personales: CV base real y documentos generados (el repo es público)
-data/cv_base.yaml
+data/cv_base*.yaml
+!data/cv_base.example.yaml
 salidas/
 data/respuestas.yaml
 data/*.sqlite*

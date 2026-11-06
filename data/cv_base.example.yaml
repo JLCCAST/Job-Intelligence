@@ -5,6 +5,7 @@
 
 contacto:
   nombre: Ana Pérez Ejemplo
+  titular: Practicante de Data Analytics  # opcional, va bajo el nombre
   email: ana.ejemplo@correo.com
   telefono: "999999999"
   ubicacion: Lima, Perú
@@ -36,8 +37,8 @@ proyectos:
 habilidades:
   - grupo: Datos
     items:
-      - {nombre: SQL, nivel: Intermedio}
-      - {nombre: Python, nivel: Básico}
+      - {nombre: SQL}
+      - {nombre: Python}  # `nivel` es opcional; mejor que lo demuestren los proyectos
       - {nombre: Power BI}
 
 educacion:
@@ -45,10 +46,7 @@ educacion:
     institucion: Universidad Ejemplo
     inicio: Marzo 2022
     fin: Actualidad
-
-logros:
-  - titulo: Tercio superior
-    descripcion: Reconocimiento por rendimiento académico.
+    detalle: 6.º ciclo · Tercio superior  # opcional
 
 certificados:
   - {nombre: SQL desde cero, emisor: Plataforma Ejemplo}

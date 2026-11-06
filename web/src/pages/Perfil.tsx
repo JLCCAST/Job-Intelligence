@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api";
 import { useAvisos } from "../components/avisos";
+import EditorCV from "../components/EditorCV";
 import {
   Boton, Campo, Cargando, Encabezado, Insignia, Segmentado, Tarjeta, Vacio, claseCampo,
 } from "../components/ui";
@@ -53,29 +54,9 @@ export default function Perfil() {
         </div>
       )}
 
-      {pestana === "CV base" && (data.cv ? (
-        <div className="flex flex-col gap-4">
-          <Tarjeta>
-            <p className="text-lg font-semibold text-ink">{data.cv.nombre}</p>
-            <p className="mt-2 text-sm leading-relaxed text-ink-2">{data.cv.perfil}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Insignia tono="info">{data.cv.experiencias} experiencia(s)</Insignia>
-              <Insignia tono="info">{data.cv.proyectos.length} proyectos</Insignia>
-              <Insignia tono="info">{data.cv.habilidades} habilidades</Insignia>
-            </div>
-            <p className="mt-4 text-xs text-ink-3">Pluma solo puede usar lo que está aquí. Se edita en data/cv_base.yaml.</p>
-          </Tarjeta>
-          {data.cv.proyectos.map((p) => (
-            <details key={p.nombre} className="group rounded-md border border-line bg-surface p-5">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold text-ink">
-                {p.nombre}<ChevronDown className="size-4 shrink-0 text-ink-3 transition group-open:rotate-180" />
-              </summary>
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-2">{p.logros.map((l) => <li key={l}>{l}</li>)}</ul>
-              <div className="mt-3 flex flex-wrap gap-1.5">{p.stack.map((s) => <Insignia key={s}>{s}</Insignia>)}</div>
-            </details>
-          ))}
-        </div>
-      ) : <Vacio icono={User} titulo="No hay CV base">Copia data/cv_base.example.yaml como data/cv_base.yaml y complétalo.</Vacio>)}
+      {/* El editor queda montado al cambiar de pestaña, para no perder cambios sin guardar. */}
+      {data.cv && <div hidden={pestana !== "CV base"}><EditorCV /></div>}
+      {pestana === "CV base" && (data.cv ? null : <Vacio icono={User} titulo="No hay CV base">Copia data/cv_base.example.yaml como data/cv_base.yaml y complétalo.</Vacio>)}
 
       {pestana === "Respuestas al Preguntón" && (data.respuestas.length ? (
         <div className="grid gap-3 sm:grid-cols-2">
