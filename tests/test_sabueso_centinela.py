@@ -1,6 +1,6 @@
 """
 Tests de Sabueso (fuente Get on Board + filtro + tope) y Centinela
-(resumen y notificación). Sin red, sin Gemini y sin Supabase.
+(resumen y notificación). Sin red, sin IA y sin Supabase.
 """
 
 from app.agents import centinela, lupa, sabueso
@@ -143,35 +143,6 @@ def test_filtro_excluye_senior_y_lead():
     assert sabueso.titulo_relevante("Data Engineer Jr", palabras, excluidas)
 
 
-def test_gemini_reintenta_solo_errores_temporales(monkeypatch):
-    from app import gemini
-
-    llamadas = []
-
-    class Modelos:
-        def generate_content(self, **kwargs):
-            llamadas.append(1)
-            if len(llamadas) < 3:
-                raise RuntimeError("503 UNAVAILABLE")
-            return "ok"
-
-    class Cliente:
-        models = Modelos()
-
-    monkeypatch.setattr(gemini, "_get_client", lambda: Cliente())
-    monkeypatch.setattr(gemini.time, "sleep", lambda s: None)
-    assert gemini._generar(model="x") == "ok"
-    assert len(llamadas) == 3
-
-    llamadas.clear()
-    Modelos.generate_content = lambda self, **k: (llamadas.append(1), (_ for _ in ()).throw(ValueError("400 bad")))[1]
-    try:
-        gemini._generar(model="x")
-    except ValueError:
-        pass
-    assert len(llamadas) == 1  # un error que no es temporal no se reintenta
-
-
 def test_sabueso_se_detiene_si_se_agota_la_cuota_diaria(monkeypatch):
     ofertas = [_oferta(f"https://x/{i}", ["Peru"]) for i in range(4)]
     monkeypatch.setitem(sabueso.FUENTES, "getonbrd", lambda consulta: ofertas)
@@ -190,60 +161,3 @@ def test_sabueso_se_detiene_si_se_agota_la_cuota_diaria(monkeypatch):
     assert len(llamadas) == 2                 # no siguió gastando
     assert r.pendientes_por_tope == 3
     assert "cuota diaria" in r.errores[0]
-
-
-def test_cada_agente_tiene_su_modelo_y_el_env_manda(monkeypatch):
-    from app import gemini
-
-    for var in ("GEMINI_MODELO", "GEMINI_MODELO_LUPA", "GEMINI_MODELO_PLUMA"):
-        monkeypatch.delenv(var, raising=False)
-    assert gemini.modelo_para("lupa") != gemini.modelo_para("pluma")
-
-    monkeypatch.setenv("GEMINI_MODELO", "modelo-global")
-    assert gemini.modelo_para("pluma") == "modelo-global"
-
-    monkeypatch.setenv("GEMINI_MODELO_PLUMA", "modelo-pluma")
-    assert gemini.modelo_para("pluma") == "modelo-pluma"
-    assert gemini.modelo_para("lupa") == "modelo-global"
-
-    monkeypatch.setenv("GEMINI_MODELO_LUPA", "lite-a, lite-b")
-    assert gemini.modelos_para("lupa") == ["lite-a", "lite-b"]
-
-
-def test_si_un_modelo_agota_su_cuota_diaria_pasa_al_siguiente(monkeypatch):
-    from app import gemini
-
-    monkeypatch.setenv("GEMINI_MODELO_LUPA", "lite-a,lite-b")
-    monkeypatch.setattr(gemini, "_agotados_hoy", set())
-    usados = []
-
-    def fake_generar(model, **kwargs):
-        usados.append(model)
-        if model == "lite-a":
-            raise RuntimeError("429 RESOURCE_EXHAUSTED GenerateRequestsPerDayPerProjectPerModel-FreeTier")
-        return "ok"
-
-    monkeypatch.setattr(gemini, "_generar", fake_generar)
-    assert gemini._generar_para("lupa", contents="x") == ("ok", "lite-b")
-    # La segunda vez ya no pierde una petición con el modelo agotado.
-    assert gemini._generar_para("lupa", contents="x") == ("ok", "lite-b")
-    assert usados == ["lite-a", "lite-b", "lite-b"]
-
-
-def test_si_todos_agotan_la_cuota_el_error_sigue_siendo_de_cuota_diaria(monkeypatch):
-    from app import gemini
-
-    monkeypatch.setenv("GEMINI_MODELO_LUPA", "lite-a,lite-b")
-    monkeypatch.setattr(gemini, "_agotados_hoy", set())
-
-    def siempre_agotado(model, **kwargs):
-        raise RuntimeError("429 RESOURCE_EXHAUSTED PerDay")
-
-    monkeypatch.setattr(gemini, "_generar", siempre_agotado)
-    try:
-        gemini._generar_para("lupa", contents="x")
-    except RuntimeError as exc:
-        assert gemini.es_cuota_diaria_agotada(exc)   # Sabueso se detiene con esto
-        assert "lite-b" in str(exc)
-    else:
-        raise AssertionError("debía fallar")

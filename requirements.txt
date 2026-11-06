@@ -4,7 +4,7 @@ requests==2.32.3
 beautifulsoup4==4.12.3
 lxml==5.3.0
 pydantic==2.13.5
-google-genai
+litellm==1.108.1   # Gemini, Groq, Ollama... con la misma función (app/llm.py)
 python-dotenv
 psycopg2-binary
 langgraph==1.2.16

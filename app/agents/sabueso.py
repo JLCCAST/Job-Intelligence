@@ -22,7 +22,7 @@ import yaml
 from app.agents import batuta
 from app.cv.cargador import RAIZ
 from app.fuentes import OfertaEncontrada, getonbrd
-from app.gemini import es_cuota_diaria_agotada
+from app.llm import es_cuota_diaria_agotada
 from app.repository import buscar_job_por_url
 from app.source_resolver import canonicalizar_url
 

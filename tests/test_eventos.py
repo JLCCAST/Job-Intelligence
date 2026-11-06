@@ -61,5 +61,6 @@ def test_catalogo_de_agentes_incluye_modelos(monkeypatch, tmp_path):
     monkeypatch.setattr(eventos, "RUTA_ACTIVIDAD", tmp_path / "a.jsonl")
     datos = TestClient(app).get("/api/agentes").json()
     por_id = {a["id"]: a for a in datos["agentes"]}
-    assert len(por_id) == 11 and por_id["lupa"]["gemini"] and por_id["lupa"]["modelos"]
+    assert len(por_id) == 12 and por_id["lupa"]["gemini"] and por_id["lupa"]["modelos"]
+    assert por_id["notario"]["gemini"] and por_id["notario"]["modelos"]
     assert por_id["balanza"]["modelos"] == []

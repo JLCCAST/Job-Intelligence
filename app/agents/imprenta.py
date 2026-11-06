@@ -7,11 +7,14 @@ Tarea fija: generar los dos DOCX de una postulación, sin LLM:
     Brechas_<empresa>_<puesto>.docx  -> qué te falta y qué estudiar
 
 Regla de seguridad: el texto de Pluma solo se usa si pasó el
-validador. Si después de los reintentos seguía con problemas, el CV
-sale con tus bullets ORIGINALES (ya ordenados por relevancia) y el
-documento de brechas explica por qué.
+validador, y solo en los cambios que aceptaste en la revisión de
+Notario (los rechazados vuelven a tu texto original). Si después de
+los reintentos seguía con problemas, el CV sale con tus bullets
+ORIGINALES (ya ordenados por relevancia) y el documento de brechas
+explica por qué.
 """
 
+import json
 import re
 from datetime import datetime
 import unicodedata
@@ -20,13 +23,14 @@ from typing import Optional
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Pt, RGBColor
 
 from app.agents.estado import CVState
 from app.cv import historial
+from app.cv.cambios import textos_con_decisiones
 from app.cv.cargador import RAIZ, cargar_cv_base
 from app.cv.modelo import CVBase
 
@@ -69,10 +73,6 @@ def _documento_base() -> Document:
     return doc
 
 
-def _ancho_util() -> Emu:
-    return Emu(ANCHO_A4 - 2 * MARGEN)
-
-
 def _linea_inferior(parrafo) -> None:
     """Borde inferior fino bajo los títulos de sección."""
     pPr = parrafo._p.get_or_add_pPr()
@@ -103,13 +103,14 @@ def _vineta(doc, texto: str):
 
 
 def _encabezado_item(doc, izquierda: str, derecha: Optional[str] = None) -> None:
+    # Fecha con " | " y no con tabulación: algunos ATS pegan o pierden
+    # el texto alineado con tabs.
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(4)
     p.paragraph_format.keep_with_next = True
-    p.paragraph_format.tab_stops.add_tab_stop(_ancho_util(), WD_TAB_ALIGNMENT.RIGHT)
     p.add_run(izquierda).bold = True
     if derecha:
-        p.add_run("\t" + derecha)
+        p.add_run(" | " + derecha)
 
 
 def _etiqueta_valor(doc, etiqueta: str, valor: str) -> None:
@@ -138,12 +139,11 @@ def _textos_finales(cv: CVBase, state: CVState) -> tuple[str, dict, dict, list[s
             originales(cv.proyectos, seleccion["proyectos"]),
             [],
         )
-    return (
-        redaccion["perfil"],
-        {i["indice"]: i["logros"] for i in redaccion["experiencia"]},
-        {i["indice"]: i["logros"] for i in redaccion["proyectos"]},
-        redaccion["habilidades_destacadas"],
+    # Texto de Pluma, salvo en los cambios que rechazaste en la revisión.
+    perfil, experiencia, proyectos = textos_con_decisiones(
+        cv, seleccion, redaccion, set(state.get("rechazados") or [])
     )
+    return perfil, experiencia, proyectos, redaccion["habilidades_destacadas"]
 
 
 def generar_cv(cv: CVBase, state: CVState, carpeta: Path) -> Path:
@@ -159,25 +159,43 @@ def generar_cv(cv: CVBase, state: CVState, carpeta: Path) -> Path:
     run.bold = True
     run.font.size = Pt(16)
     run.font.color.rgb = COLOR_TITULOS
+    if c.titular:
+        doc.add_paragraph(c.titular).alignment = WD_ALIGN_PARAGRAPH.CENTER
     for linea in (
-        [c.email, c.telefono, c.ubicacion],
+        [c.ubicacion, c.telefono, c.email],
         [c.linkedin, c.github],
     ):
-        texto = " · ".join(x for x in linea if x)
+        texto = " | ".join(x for x in linea if x)
         if texto:
             doc.add_paragraph(texto).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     _titulo_seccion(doc, "Perfil profesional")
     doc.add_paragraph(perfil).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
-    if logros_exp:
-        _titulo_seccion(doc, "Experiencia laboral")
-        for sel in state["seleccion"]["experiencia"]:
-            e = cv.experiencia[sel["indice"]]
-            izquierda = f"{e.empresa} — {e.cargo}" + (f" | {e.ubicacion}" if e.ubicacion else "")
-            _encabezado_item(doc, izquierda, f"{e.inicio} – {e.fin}")
-            for logro in logros_exp[sel["indice"]]:
-                _vineta(doc, logro)
+    # Orden pensado para prácticas: lo académico y lo técnico primero,
+    # luego proyectos y al final la experiencia laboral.
+    if cv.educacion:
+        _titulo_seccion(doc, "Educación")
+        for ed in cv.educacion:
+            fechas = " – ".join(x for x in (ed.inicio, ed.fin) if x)
+            _encabezado_item(doc, f"{ed.institucion} | {ed.titulo}", fechas or None)
+            if ed.detalle:
+                doc.add_paragraph(ed.detalle)
+
+    if cv.logros:
+        _titulo_seccion(doc, "Logros destacados")
+        for lo in cv.logros:
+            _encabezado_item(doc, lo.titulo)
+            if lo.descripcion:
+                doc.add_paragraph(lo.descripcion)
+
+    if cv.habilidades:
+        _titulo_seccion(doc, "Habilidades técnicas")
+        for grupo in cv.habilidades:
+            # Las habilidades destacadas por Pluma van primero en su grupo.
+            items = sorted(grupo.items, key=lambda h: h.nombre.strip().lower() not in destacadas_min)
+            texto = ", ".join(f"{h.nombre} ({h.nivel})" if h.nivel else h.nombre for h in items)
+            _etiqueta_valor(doc, f"{grupo.grupo}: ", texto)
 
     if logros_proy:
         _titulo_seccion(doc, "Proyectos")
@@ -189,42 +207,28 @@ def generar_cv(cv: CVBase, state: CVState, carpeta: Path) -> Path:
                 # Mantiene el proyecto junto con su línea de Stack.
                 _vineta(doc, logro).paragraph_format.keep_with_next = bool(pr.stack)
             if pr.stack:
-                _etiqueta_valor(doc, "Stack: ", " · ".join(pr.stack))
+                _etiqueta_valor(doc, "Stack: ", ", ".join(pr.stack))
 
-    if cv.habilidades:
-        _titulo_seccion(doc, "Habilidades técnicas")
-        for grupo in cv.habilidades:
-            # Las habilidades destacadas por Pluma van primero en su grupo.
-            items = sorted(grupo.items, key=lambda h: h.nombre.strip().lower() not in destacadas_min)
-            texto = " · ".join(f"{h.nombre} ({h.nivel})" if h.nivel else h.nombre for h in items)
-            _etiqueta_valor(doc, f"{grupo.grupo}: ", texto)
-
-    if cv.educacion:
-        _titulo_seccion(doc, "Educación")
-        for ed in cv.educacion:
-            fechas = " – ".join(x for x in (ed.inicio, ed.fin) if x)
-            _encabezado_item(doc, ed.titulo, fechas or None)
-            doc.add_paragraph(ed.institucion)
-
-    if cv.logros:
-        _titulo_seccion(doc, "Logros destacados")
-        for lo in cv.logros:
-            _encabezado_item(doc, lo.titulo)
-            if lo.descripcion:
-                doc.add_paragraph(lo.descripcion)
+    if logros_exp:
+        _titulo_seccion(doc, "Experiencia laboral")
+        for sel in state["seleccion"]["experiencia"]:
+            e = cv.experiencia[sel["indice"]]
+            izquierda = f"{e.empresa} | {e.cargo}" + (f" | {e.ubicacion}" if e.ubicacion else "")
+            _encabezado_item(doc, izquierda, f"{e.inicio} – {e.fin}")
+            for logro in logros_exp[sel["indice"]]:
+                _vineta(doc, logro)
 
     if cv.certificados:
-        _titulo_seccion(doc, "Certificados")
-        for ce in cv.certificados:
-            _vineta(doc, f"{ce.nombre} — {ce.emisor}")
+        _titulo_seccion(doc, "Certificaciones")
+        doc.add_paragraph(" | ".join(f"{ce.nombre} – {ce.emisor}" for ce in cv.certificados))
 
     if cv.idiomas:
         _titulo_seccion(doc, "Idiomas")
-        doc.add_paragraph(" · ".join(f"{i.idioma}: {i.nivel}" for i in cv.idiomas))
+        doc.add_paragraph(" | ".join(f"{i.idioma}: {i.nivel}" for i in cv.idiomas))
 
     if cv.competencias:
         _titulo_seccion(doc, "Competencias")
-        doc.add_paragraph(" · ".join(cv.competencias))
+        doc.add_paragraph(", ".join(cv.competencias))
 
     carpeta.mkdir(parents=True, exist_ok=True)
     ruta = carpeta / _nombre_archivo("CV", state["oferta"])
@@ -375,8 +379,35 @@ def imprimir(state: CVState) -> CVState:
     cv = cargar_cv_base()
     ruta_cv = str(generar_cv(cv, state, carpeta))
     ruta_brechas = str(generar_brechas(cv, state, carpeta))
+    revision = guardar_revision(state, carpeta)
     historial.registrar(
         oferta["job_id"], oferta["puesto"], oferta.get("empresa"), ruta_cv, ruta_brechas,
         usa_texto_de_pluma=bool(state.get("redaccion")) and not state.get("violaciones"),
+        revision=revision,
     )
     return {"ruta_cv": ruta_cv, "ruta_brechas": ruta_brechas}
+
+
+def guardar_revision(state: CVState, carpeta: Path) -> Optional[dict]:
+    """
+    Deja junto a los Word un cambios.json con lo que cambió la IA, cómo
+    lo explicó Notario y qué decidiste. Así, si te llaman a entrevista,
+    sabes qué partes del CV que enviaste escribió la IA.
+    """
+    cambios = state.get("cambios") or []
+    if not cambios or state.get("violaciones"):
+        return None
+    rechazados = set(state.get("rechazados") or [])
+    datos = {
+        "fecha": datetime.now().isoformat(timespec="seconds"),
+        "notario_error": state.get("notario_error"),
+        "estructura": state.get("estructura_cv", []),
+        "cambios": [{**c, "aceptado": c["id"] not in rechazados} for c in cambios],
+    }
+    ruta = carpeta / "cambios.json"
+    ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {
+        "cambios": len(cambios),
+        "aceptados": len(cambios) - len(rechazados & {c["id"] for c in cambios}),
+        "ruta": str(ruta),
+    }

@@ -23,8 +23,8 @@ from app.cv.cargador import RAIZ
 RUTA_ACTIVIDAD = RAIZ / "data" / "actividad.jsonl"
 MAX_REGISTROS = 400
 
-# Orden = orden en que aparecen en la app. "gemini": agente que llama al
-# LLM; "modelo": clave en app.gemini.MODELOS_POR_AGENTE.
+# Orden = orden en que aparecen en la app. "gemini": agente que llama a
+# un LLM (Gemini o su respaldo); "modelo": clave en app.llm.MODELOS_POR_AGENTE.
 AGENTES = [
     {"id": "batuta", "nombre": "Batuta", "rol": "Orquestador",
      "tarea": "Coordina a los demás agentes con LangGraph: decide el orden, las pausas y los reintentos, y guarda el progreso.",
@@ -50,8 +50,11 @@ AGENTES = [
     {"id": "validador", "nombre": "Validador", "rol": "Control de calidad",
      "tarea": "Revisa el texto de Pluma: rechaza tecnologías o cifras que no estén en tu CV ni hayas confirmado.",
      "gemini": False, "flujo": "cv"},
+    {"id": "notario", "nombre": "Notario", "rol": "Auditor de cambios",
+     "tarea": "Explica cada cambio que hizo la IA en tu CV y avisa lo que conviene revisar. Tú aceptas o rechazas cada uno.",
+     "gemini": True, "modelo": "notario", "flujo": "cv"},
     {"id": "imprenta", "nombre": "Imprenta", "rol": "Documentador",
-     "tarea": "Genera el CV listo para enviar y el informe de brechas en Word.",
+     "tarea": "Genera el CV listo para enviar (solo con los cambios que aceptaste) y el informe de brechas en Word.",
      "gemini": False, "flujo": "cv"},
     {"id": "centinela", "nombre": "Centinela", "rol": "Seguimiento",
      "tarea": "Arma el resumen diario, te recuerda las postulaciones sin respuesta y te avisa en Windows.",
@@ -64,14 +67,16 @@ AGENTES = [
 # Nodo del grafo -> (agente, qué está haciendo mientras trabaja)
 NODOS = {
     "lupa_leer": ("lupa", "Leyendo la oferta"),
-    "lupa_extraer": ("lupa", "Extrayendo requisitos con Gemini"),
+    "lupa_extraer": ("lupa", "Extrayendo requisitos con IA"),
     "archivero": ("archivero", "Normalizando y guardando la oferta"),
     "balanza": ("balanza", "Calculando tu Match Score"),
     "balanza_preparar": ("balanza", "Revisando qué pide la oferta y qué cumples"),
     "pregunton": ("pregunton", "Buscando lo que falta en tu CV"),
     "pluma_seleccionar": ("pluma", "Eligiendo tus proyectos más relevantes"),
-    "pluma_redactar": ("pluma", "Redactando el CV con Gemini"),
+    "pluma_redactar": ("pluma", "Redactando el CV con IA"),
     "pluma_validar": ("validador", "Revisando que no haya nada inventado"),
+    "notario_explicar": ("notario", "Explicando los cambios con IA"),
+    "notario_revisar": ("notario", "Preparando tu revisión"),
     "imprenta": ("imprenta", "Generando los documentos en Word"),
 }
 
@@ -94,7 +99,7 @@ def resumir(nodo: str, r: dict, interrupciones: list) -> tuple[str, str]:
         if r.get("registration_status") == "offer_closed":
             return "detenido", "La oferta ya no está disponible: no la registro."
         if r.get("terminado"):
-            return "error", f"Gemini no respondió: {(r.get('error_detail') or '')[:140]}"
+            return "error", f"La IA no respondió: {(r.get('error_detail') or '')[:140]}"
         e = r["extraction"]
         tecnologias = e.technologies if hasattr(e, "technologies") else e.get("technologies", [])
         titulo = e.job_title if hasattr(e, "job_title") else e.get("job_title")
@@ -135,7 +140,7 @@ def resumir(nodo: str, r: dict, interrupciones: list) -> tuple[str, str]:
 
     if nodo == "pluma_redactar":
         if r.get("redaccion") is None:
-            return "error", f"Gemini falló: {(r.get('error_detail') or '')[:140]}"
+            return "error", f"La IA falló: {(r.get('error_detail') or '')[:140]}"
         red = r["redaccion"]
         bullets = sum(len(i["logros"]) for s in ("experiencia", "proyectos") for i in red[s])
         return "ok", f"Redacté el perfil y {_plural(bullets, 'bullet', 'bullets')}."
@@ -147,6 +152,25 @@ def resumir(nodo: str, r: dict, interrupciones: list) -> tuple[str, str]:
         if r.get("intentos", 0) >= 3:
             return "rechazo", f"Sigue con {_plural(len(v), 'problema', 'problemas')}: Imprenta usará tus textos originales."
         return "rechazo", f"Rechacé el texto ({_plural(len(v), 'problema', 'problemas')}). Pluma lo corrige."
+
+    if nodo == "notario_explicar":
+        n = len(r.get("cambios") or [])
+        if not n:
+            return "ok", "Pluma no cambió ningún texto: no hay nada que explicar."
+        if r.get("notario_error"):
+            return "ok", f"La IA no respondió: dejé motivos automáticos en {_plural(n, 'cambio', 'cambios')}."
+        alertas = sum(1 for c in r["cambios"] if c.get("alerta") or c.get("atencion"))
+        extra = f" {_plural(alertas, 'conviene', 'convienen')} revisar con cuidado." if alertas else ""
+        return "ok", f"Expliqué {_plural(n, 'cambio', 'cambios')} de la IA.{extra}"
+
+    if nodo == "notario_revisar":
+        if interrupciones:
+            n = len(interrupciones[0].get("value", {}).get("cambios", []))
+            return "pausa", f"Te muestro {_plural(n, 'cambio', 'cambios')}. Espero tu revisión."
+        rechazados = len(r.get("rechazados") or [])
+        if rechazados:
+            return "ok", f"Guardé tu revisión: {_plural(rechazados, 'cambio rechazado vuelve', 'cambios rechazados vuelven')} a tu texto original."
+        return "ok", "Guardé tu revisión: aceptaste todos los cambios."
 
     if nodo == "imprenta":
         return "ok", "Generé tu CV y el informe de brechas en Word."

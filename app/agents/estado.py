@@ -70,6 +70,12 @@ class CVState(TypedDict, total=False):
     intentos: int
     error_detail: Optional[str]
 
+    # --- Notario ---
+    cambios: list[dict]                 # app/cv/cambios.py, con la explicación de Notario
+    estructura_cv: list[str]            # proyectos fuera, reordenados... (informativo)
+    notario_error: Optional[str]        # si Gemini falló: quedan los motivos calculados
+    rechazados: list[str]               # ids de los cambios que rechazaste
+
     # --- Imprenta ---
     ruta_cv: Optional[str]
     ruta_brechas: Optional[str]

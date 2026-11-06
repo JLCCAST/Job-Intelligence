@@ -13,8 +13,8 @@ const FLUJOS: { titulo: string; descripcion: string; pasos: (string | { bucle: [
   },
   {
     titulo: "Adaptar tu CV",
-    descripcion: "Preguntón pausa el flujo hasta que respondes; el Validador puede devolverle el texto a Pluma.",
-    pasos: ["batuta", "balanza", "pregunton", { bucle: ["pluma", "validador"] }, "imprenta"],
+    descripcion: "Preguntón pausa el flujo hasta que respondes; el Validador puede devolverle el texto a Pluma; Notario te explica cada cambio y espera tu revisión.",
+    pasos: ["batuta", "balanza", "pregunton", { bucle: ["pluma", "validador"] }, "notario", "imprenta"],
   },
   {
     titulo: "Rutina diaria (8:00)",
@@ -22,6 +22,16 @@ const FLUJOS: { titulo: string; descripcion: string; pasos: (string | { bucle: [
     pasos: ["sabueso", "lupa", "balanza", "centinela", "brujula"],
   },
 ];
+
+// Los modelos llegan como "proveedor/modelo" (LiteLLM): "groq/openai/gpt-oss-120b" -> "Groq · openai/gpt-oss-120b".
+const PROVEEDOR: Record<string, string> = {
+  gemini: "Gemini", groq: "Groq", ollama: "Ollama", ollama_chat: "Ollama", openai: "OpenAI", anthropic: "Claude",
+};
+function etiquetaModelo(modelo: string) {
+  const [proveedor, ...resto] = modelo.split("/");
+  if (!resto.length) return modelo;
+  return `${PROVEEDOR[proveedor] ?? proveedor} · ${resto.join("/")}`;
+}
 
 function hace(fecha: string) {
   const s = (Date.now() - new Date(fecha).getTime()) / 1000;
@@ -114,10 +124,10 @@ export default function Agentes() {
                 </div>
                 <p className="text-sm leading-relaxed text-ink-2">{a.tarea}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {a.gemini
-                    ? <Insignia tono="info" icono={Sparkles}>Gemini · {a.modelos[0]}</Insignia>
+                  {a.gemini && a.modelos.length > 0
+                    ? <Insignia tono="info" icono={Sparkles}>{etiquetaModelo(a.modelos[0])}</Insignia>
                     : <Insignia icono={Cpu}>Sin IA · Python</Insignia>}
-                  {a.gemini && a.modelos.length > 1 && <Insignia>respaldo: {a.modelos.slice(1).join(", ")}</Insignia>}
+                  {a.gemini && a.modelos.length > 1 && <Insignia>respaldo: {a.modelos.slice(1).map(etiquetaModelo).join(", ")}</Insignia>}
                 </div>
                 <div className="mt-auto border-t border-line pt-3 text-xs">
                   {ult ? (

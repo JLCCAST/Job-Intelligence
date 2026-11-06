@@ -43,6 +43,7 @@ def registrar(
     ruta_brechas: str,
     usa_texto_de_pluma: bool,
     ruta: Optional[Path] = None,
+    revision: Optional[dict] = None,
 ) -> dict:
     entradas = _cargar(ruta)
     entrada = {
@@ -54,6 +55,8 @@ def registrar(
         "ruta_cv": ruta_cv,
         "ruta_brechas": ruta_brechas,
         "usa_texto_de_pluma": usa_texto_de_pluma,
+        # {"cambios": n, "aceptados": m, "ruta": ".../cambios.json"} si revisaste cambios de la IA
+        "revision": revision,
         "enviado": False,
         "fecha_envio": None,
     }

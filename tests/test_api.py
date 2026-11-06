@@ -51,6 +51,24 @@ def test_responder_exige_donde_si_la_tiene(monkeypatch):
     assert bueno.json()["respuestas"] == [{"tecnologia": "dbt", "la_tengo": False}]
 
 
+def test_revisar_solo_si_el_flujo_espera_tu_revision(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(services.batuta, "revisar_cv", lambda t, r: llamadas.append((t, r)) or {"thread_id": t})
+    monkeypatch.setattr(services, "_resultado_cv", lambda resumen: resumen)
+
+    # El flujo espera respuestas del Preguntón, no una revisión: 409.
+    monkeypatch.setattr(services.batuta, "estado_cv",
+                        lambda t: {"esperando_respuestas": True, "esperando_revision": False})
+    r = client.post("/api/cv/flujos/t1/revisar", json={"rechazados": ["perfil"]})
+    assert r.status_code == 409 and "revisión" in r.json()["detail"]
+    assert llamadas == []
+
+    monkeypatch.setattr(services.batuta, "estado_cv",
+                        lambda t: {"esperando_respuestas": False, "esperando_revision": True})
+    assert client.post("/api/cv/flujos/t1/revisar", json={"rechazados": ["perfil"]}).status_code == 200
+    assert llamadas == [("t1", ["perfil"])]
+
+
 def test_guardar_habilidad_exige_evidencia(servicios):
     datos = {"nombre": "dbt", "categoria": "Framework", "nivel": "basico", "evidencia": ""}
     assert client.post("/api/perfil/habilidades", json=datos).status_code == 422

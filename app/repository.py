@@ -39,7 +39,7 @@ VALOR_EMPRESA_NO_ESPECIFICADA = "no_especificado"
 # decente en Power BI, a diferencia de guardar 'no_especificado'.
 EMPRESA_CENTINELA = "No especificada"
 
-# Antes dependía de que alguien importara gemini.py primero (que es
+# Antes dependía de que alguien importara la capa de IA primero (que es
 # quien llamaba a load_dotenv); un script que solo usa la BD fallaba.
 load_dotenv()
 

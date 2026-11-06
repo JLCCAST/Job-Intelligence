@@ -85,8 +85,14 @@ def _en_vivo(eventos_flujo, armar_resultado, accion: str):
         yield {"tipo": "error", "mensaje": str(exc)[:300]}
         return
     ms = int((perf_counter() - inicio) * 1000)
-    pausa = isinstance(resultado, dict) and resultado.get("esperando_respuestas")
-    resumen = "Flujo en pausa: espero tus respuestas." if pausa else f"Flujo completo en {ms / 1000:.1f} s."
+    revision = isinstance(resultado, dict) and resultado.get("esperando_revision")
+    pausa = isinstance(resultado, dict) and (resultado.get("esperando_respuestas") or revision)
+    if revision:
+        resumen = "Flujo en pausa: espero tu revisión de los cambios."
+    elif pausa:
+        resumen = "Flujo en pausa: espero tus respuestas."
+    else:
+        resumen = f"Flujo completo en {ms / 1000:.1f} s."
     eventos.registrar("batuta", resumen, "pausa" if pausa else "ok", "")
     yield {"tipo": "fin", "nodo": "batuta", "agente": "batuta", "estado": "pausa" if pausa else "ok", "resumen": resumen, "ms": ms}
     yield {"tipo": "resultado", "datos": resultado}
@@ -109,11 +115,37 @@ def iniciar_adaptacion_cv_en_vivo(job_id: int):
 
 
 def responder_preguntas_en_vivo(thread_id: str, respuestas: list[dict]):
+    exigir_pausa(thread_id, "preguntas")
     return _en_vivo(
         batuta.responder_cv_en_vivo(thread_id, respuestas),
         lambda ev: _resultado_cv(ev["resumen"]),
         "Retomando la adaptación con tus respuestas",
     )
+
+
+def revisar_cambios_en_vivo(thread_id: str, rechazados: list[str]):
+    exigir_pausa(thread_id, "revision")
+    return _en_vivo(
+        batuta.revisar_cv_en_vivo(thread_id, rechazados),
+        lambda ev: _resultado_cv(ev["resumen"]),
+        "Retomando la adaptación con tu revisión",
+    )
+
+
+class FlujoNoEspera(Exception):
+    """El flujo no está en la pausa que corresponde a lo que se envió."""
+
+
+def exigir_pausa(thread_id: str, tipo: str) -> None:
+    """
+    Evita retomar una pausa con lo que no corresponde (respuestas del
+    Preguntón cuando Notario espera tu revisión, o un flujo terminado).
+    """
+    r = batuta.estado_cv(thread_id)
+    esperando = r["esperando_respuestas"] if tipo == "preguntas" else r["esperando_revision"]
+    if not esperando:
+        que = "respuestas" if tipo == "preguntas" else "una revisión de cambios"
+        raise FlujoNoEspera(f"Este flujo no está esperando {que}. Vuelve a adaptar el CV.")
 
 
 # --------------------------------------------------------------
@@ -126,6 +158,9 @@ def responder_preguntas_en_vivo(thread_id: str, respuestas: list[dict]):
 #   if r["esperando_respuestas"]:
 #       mostrar r["preguntas"], juntar respuestas del usuario
 #       r = responder_preguntas(r["thread_id"], respuestas)
+#   if r["esperando_revision"]:
+#       mostrar r["cambios"] (con la explicación de Notario)
+#       r = revisar_cambios(r["thread_id"], ids_rechazados)
 #   r["ruta_cv"], r["ruta_brechas"]  -> los DOCX
 
 
@@ -135,10 +170,16 @@ def _resultado_cv(resumen: dict) -> dict:
         "thread_id": resumen["thread_id"],
         "esperando_respuestas": resumen["esperando_respuestas"],
         "preguntas": resumen["preguntas"],
+        # Revisión de Notario: cada cambio de la IA, con su explicación.
+        "esperando_revision": resumen.get("esperando_revision", False),
+        "cambios": resumen.get("cambios", []),
+        "estructura": resumen.get("estructura", []),
+        "notario_error": resumen.get("notario_error"),
         "ruta_cv": estado.get("ruta_cv"),
         "ruta_brechas": estado.get("ruta_brechas"),
         "usa_texto_de_pluma": bool(estado.get("redaccion")) and not estado.get("violaciones"),
         "avisos": estado.get("violaciones", []),
+        "rechazados": estado.get("rechazados", []),
     }
 
 
@@ -220,4 +261,15 @@ def responder_preguntas(thread_id: str, respuestas: list[dict]) -> dict:
         {"tecnologia": "dbt", "la_tengo": True, "nivel": "basico",
          "donde": "Curso X", "detalle": "modelos incrementales"}
     """
+    exigir_pausa(thread_id, "preguntas")
     return _resultado_cv(batuta.responder_cv(thread_id, respuestas))
+
+
+def revisar_cambios(thread_id: str, rechazados: list[str]) -> dict:
+    """
+    `rechazados`: ids de los cambios de la IA que no quieres (vuelven a
+    tu texto original). Los demás se aceptan. Retoma el flujo hasta
+    Imprenta.
+    """
+    exigir_pausa(thread_id, "revision")
+    return _resultado_cv(batuta.revisar_cv(thread_id, rechazados))

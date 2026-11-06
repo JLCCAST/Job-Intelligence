@@ -11,7 +11,7 @@ No guarda nada en la BD: eso es trabajo del Archivero.
 """
 
 from app.cleaner import clean_html, normalize_whitespace
-from app.gemini import extract_job_info
+from app.llm import extract_job_info
 from app.repository import buscar_job_por_url
 from app.scraper import fetch_html
 from app.source_resolver import canonicalizar_url

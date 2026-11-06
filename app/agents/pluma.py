@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from app.agents.estado import CVState
 from app.cv.cargador import cargar_cv_base
 from app.cv.modelo import CVBase
-from app.gemini import generar_estructurado
+from app.llm import generar_estructurado
 
 MAX_PROYECTOS = 3
 MAX_LOGROS_POR_ITEM = 4
@@ -245,6 +245,17 @@ def encontrar_violaciones(
             violaciones.append(
                 f"En {seccion} se esperaban los índices {sorted(pedidos)} y llegaron {sorted(recibidos)}."
             )
+        # La misma cantidad de bullets por ítem: cada bullet nuevo se
+        # compara con el original de su misma posición (revisión de
+        # cambios). Si Pluma junta o parte bullets, esa relación se pierde.
+        esperados = {s["indice"]: len(s["logros"]) for s in seleccion[seccion]}
+        for item in redaccion[seccion]:
+            esperado = esperados.get(item["indice"])
+            if esperado is not None and len(item["logros"]) != esperado:
+                violaciones.append(
+                    f"En {seccion} (índice {item['indice']}) se esperaban {esperado} bullets "
+                    f"y llegaron {len(item['logros'])}: no juntes ni dividas bullets."
+                )
 
     texto = " ".join(
         [redaccion["perfil"]]
@@ -290,6 +301,11 @@ def validar(state: CVState) -> CVState:
 
 
 def siguiente_tras_validar(state: CVState) -> str:
-    if not state["violaciones"] or state["intentos"] >= MAX_INTENTOS:
+    # Aprobado: Notario explica los cambios y tú los revisas.
+    if not state["violaciones"]:
+        return "notario"
+    # Sin más intentos: Imprenta usa tus textos originales (no hay
+    # cambios de IA que revisar).
+    if state["intentos"] >= MAX_INTENTOS:
         return "imprenta"
     return "pluma_redactar"

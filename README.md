@@ -1,6 +1,6 @@
 # Job-Intelligence
 
-Asistente personal de búsqueda de empleo para perfiles de datos en Perú. Busca ofertas en fuentes que lo permiten, extrae sus requisitos con Gemini, calcula qué tanto encajas, adapta tu CV **sin inventar nada** y te dice qué estudiar primero.
+Asistente personal de búsqueda de empleo para perfiles de datos en Perú. Busca ofertas en fuentes que lo permiten, extrae sus requisitos con IA (Gemini, con respaldo en Groq u Ollama), calcula qué tanto encajas, adapta tu CV **sin inventar nada** y te dice qué estudiar primero.
 
 Está construido como un sistema de **agentes con una sola tarea cada uno**, orquestados con LangGraph, y corre en local con una app web en React.
 
@@ -18,7 +18,7 @@ Postular bien a una oferta toma tiempo: leerla, ver qué piden, compararlo con l
 |---|---|
 | **Analizar oferta** | Pegas el texto (y opcionalmente el link), una URL, o la envías desde el navegador con el marcador "Enviar a Job-Intelligence". Extrae puesto, empresa, área, inglés y cada tecnología con su tipo (obligatoria o deseable), su nivel y la frase de la oferta que lo respalda. |
 | **Match Score** | Compara la oferta con tu perfil y da un puntaje de 0 a 100, junto con lo que te falta y lo que tienes en un nivel menor al pedido. |
-| **Adaptar CV** | Te pregunta por lo que falta, reescribe tu CV con el vocabulario de la oferta y genera dos Word: el **CV listo para enviar** y un **informe de brechas** con qué estudiar y cómo abordarlo en la entrevista. |
+| **Adaptar CV** | Te pregunta por lo que falta, reescribe tu CV con el vocabulario de la oferta, **te muestra cada cambio de la IA con su explicación para que lo aceptes o rechaces**, y genera dos Word: el **CV listo para enviar** y un **informe de brechas** con qué estudiar y cómo abordarlo en la entrevista. |
 | **Bandeja** | Ofertas nuevas que se buscaron solas en Get on Board, ordenadas por Match Score. |
 | **Postulaciones** | Estado de cada oferta (Postulada, Entrevista…) con su historial, y **cada versión del CV generada**: al postular queda marcada cuál enviaste, para saber qué tiene la empresa si te llaman. |
 | **Qué estudiar** | Ranking de lo que te conviene aprender según tus ofertas, y un plan de estudio con un proyecto por tecnología. |
@@ -35,7 +35,7 @@ Cada agente tiene **una tarea fija**, con entradas y salidas definidas. Batuta, 
 flowchart LR
     S[Sabueso<br/>busca en Get on Board] --> L
     U[Tú<br/>pegas texto o URL] --> L
-    L[Lupa<br/>extrae requisitos · Gemini] --> A[Archivero<br/>normaliza y guarda]
+    L[Lupa<br/>extrae requisitos · IA] --> A[Archivero<br/>normaliza y guarda]
     A --> B[Balanza<br/>Match Score]
     L -. duplicada / cerrada / error .-> F((fin))
 ```
@@ -46,13 +46,15 @@ flowchart LR
 flowchart LR
     B[Balanza<br/>desglose de la oferta] --> P[Preguntón<br/>¿lo has usado?]
     P -- pausa: respondes --> PS[Pluma<br/>elige proyectos]
-    PS --> PR[Pluma<br/>redacta · Gemini]
+    PS --> PR[Pluma<br/>redacta · IA]
     PR --> V{Validador}
     V -- inventó algo, hasta 2 veces --> PR
-    V -- ok, o se agotaron los intentos --> I[Imprenta<br/>CV.docx + Brechas.docx]
+    V -- ok --> N[Notario<br/>explica cada cambio · IA]
+    N -- pausa: aceptas o rechazas --> I[Imprenta<br/>CV.docx + Brechas.docx]
+    V -- se agotaron los intentos --> I
 ```
 
-| Agente | Tarea | ¿Usa Gemini? |
+| Agente | Tarea | ¿Usa IA? |
 |---|---|---|
 | **Batuta** | Orquesta los flujos, las pausas y los reintentos (LangGraph, estado guardado en SQLite) | No |
 | **Sabueso** | Busca ofertas en fuentes permitidas, filtra por país, título y seniority, y deduplica | No |
@@ -60,25 +62,29 @@ flowchart LR
 | **Archivero** | Une tecnologías y empresas con el catálogo (alias, nombre canónico o creación marcada para revisión) | No |
 | **Balanza** | Calcula el Match Score y las brechas | No |
 | **Preguntón** | Pregunta por cada requisito que no está en tu perfil ni en tu CV, y recuerda tus respuestas | No (plantilla) |
-| **Pluma** | Elige y ordena proyectos (Python) y reescribe los textos (Gemini) | Sí |
-| **Imprenta** | Genera los DOCX con python-docx | No |
+| **Pluma** | Elige y ordena proyectos (Python) y reescribe los textos (IA) | Sí |
+| **Validador** | Rechaza tecnologías o cifras que no estén en tu CV, y cambios de estructura | No |
+| **Notario** | Explica cada cambio de la IA (qué cambió, por qué, qué requisito atiende) y pausa para que decidas; el código verifica lo que afirma | Sí |
+| **Imprenta** | Genera los DOCX con python-docx, solo con los cambios que aceptaste | No |
 | **Centinela** | Resumen diario, recordatorios de seguimiento y notificación de Windows | No |
-| **Brújula** | Calcula qué estudiar primero; Gemini solo redacta el plan | Solo el plan |
+| **Brújula** | Calcula qué estudiar primero; la IA solo redacta el plan | Solo el plan |
 
 La interfaz (React) habla solo con la API REST de FastAPI, y la API solo llama a `app/services.py`. Por eso pasar de Streamlit a React no tocó los agentes ni sus tests.
 
 ## Decisiones de diseño
 
-- **Si algo se puede calcular, no lo decide el LLM.** El Match Score, la fuente de una oferta, si una tecnología ya existe, qué proyectos van en el CV y qué estudiar primero se calculan en Python. Gemini solo hace lo que es juicio sobre texto: extraer requisitos y redactar.
+- **Si algo se puede calcular, no lo decide el LLM.** El Match Score, la fuente de una oferta, si una tecnología ya existe, qué proyectos van en el CV y qué estudiar primero se calculan en Python. La IA solo hace lo que es juicio sobre texto: extraer requisitos, redactar y explicar cambios.
 - **Fórmula del Match Score:** `Σ(peso × crédito) / Σ(peso) × 100`. El peso es 1.0 si la tecnología es obligatoria y 0.5 si es deseable. El crédito es 1.0 si la tienes en el nivel pedido, 0.7 si la tienes en un nivel menor y 0 si no la tienes. El denominador lo define la oferta, así que saber cosas que no piden no sube el puntaje.
 - **Pluma no puede inventar.** Solo recibe índices de tus proyectos, así que no puede cambiar nombres, empresas ni fechas. Un validador rechaza el texto si menciona una tecnología que no tienes, una cifra que no está en tu CV o si cambia la estructura. Si después de 2 correcciones sigue fallando, el CV sale con **tus textos originales** y el informe explica por qué.
 - **Preguntar antes de escribir.** Lo que la oferta pide y no está en tu CV se pregunta. Solo lo que confirmas puede aparecer en el CV.
+- **Tú decides qué cambios de la IA entran.** Notario compara cada texto de Pluma con tu original (palabra por palabra) y explica el cambio. Si su explicación cita un requisito que la oferta no pide, o que el texto nuevo no menciona, el código lo marca. Lo que rechazas vuelve a tu texto original, y queda un `cambios.json` junto a cada versión del CV. Si la IA no responde, el motivo se calcula comparando textos y el flujo sigue.
+- **Varios proveedores de IA, con respaldo.** Todas las llamadas pasan por `app/llm.py` con [LiteLLM](https://github.com/BerriAI/litellm). Cada agente prueba sus modelos de Gemini y, si agotaron la cuota o fallan, pasa a Groq u Ollama (si los configuraste). Los agentes no saben qué proveedor respondió, y la respuesta siempre se valida con Pydantic.
 - **Prioridad de estudio:** `demanda × distancia × tendencia`. La demanda mide cuántas ofertas la piden; la distancia, si te falta (1), si la tienes en un nivel menor (0.5) o si está en tu CV pero no en tu perfil (0.25). La tendencia compara los últimos 30 días con los 30 anteriores, y solo cuenta si cada periodo tiene al menos 5 ofertas.
 - **Datos personales fuera del repo:** el CV base, tus respuestas, los documentos generados y el `.env` están en `.gitignore`. El repo solo trae una plantilla con datos ficticios.
 
 ## Cómo correrlo
 
-**Requisitos:** Node.js 20+ (para compilar el frontend), Python 3.13, una base PostgreSQL (yo uso Supabase) y una API key de Gemini.
+**Requisitos:** Node.js 20+ (para compilar el frontend), Python 3.13, una base PostgreSQL (yo uso Supabase) y una API key de Gemini. Opcional: una key de Groq o [Ollama](https://ollama.com) instalado, como respaldo cuando se agota la cuota de Gemini (ver `.env.example`).
 
 ```bash
 python -m venv venv
@@ -110,9 +116,10 @@ De dónde sacar los dos valores del `.env` (ambos son gratuitos):
 
 ```
 app/
-  agents/      Batuta, Sabueso, Lupa, Archivero, Balanza, Preguntón, Pluma, Imprenta, Centinela, Brújula
+  agents/      Batuta, Sabueso, Lupa, Archivero, Balanza, Preguntón, Pluma, Notario, Imprenta, Centinela, Brújula
+  llm.py       capa de IA: cadena de modelos por agente (Gemini → Groq → Ollama) con LiteLLM
   fuentes/     adaptadores de fuentes de ofertas (Get on Board)
-  cv/          CV base, respuestas del Preguntón e historial de CVs enviados
+  cv/          CV base, respuestas del Preguntón, cambios de la IA e historial de CVs enviados
   services.py  lo único que usan las interfaces
   consultas.py lecturas y cambios simples para la app
   main.py      servidor: sirve la app (web/dist), /recibir del marcador y /analyze-job
@@ -123,18 +130,18 @@ web/           frontend: React + Vite + Tailwind + TanStack Query + Recharts
 config/        qué busca Sabueso
 sql/           esquema y migraciones
 scripts/       iniciar (app + API), rutina diaria, tarea programada y pruebas manuales
-tests/         144 tests
+tests/         160 tests
 ```
 
 ## Stack
 
-Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini (`google-genai`, structured output) · Pydantic · PostgreSQL / Supabase (psycopg2) · React + Vite + Tailwind CSS + Recharts · FastAPI · python-docx · BeautifulSoup · pytest
+Python 3.13 · LangGraph (+ checkpointer SQLite) · Gemini / Groq / Ollama vía LiteLLM (structured output) · Pydantic · PostgreSQL / Supabase (psycopg2) · React + Vite + Tailwind CSS + Recharts · FastAPI · python-docx · BeautifulSoup · pytest
 
 ## Limitaciones
 
 - **Una sola fuente automática.** Las ofertas de LinkedIn, Bumeran o Computrabajo se pegan a mano.
 - **Muestra chica.** Los hallazgos de demanda son de mis ofertas, no del mercado.
-- **Cuota de Gemini.** El plan gratuito tiene un tope diario por modelo, aunque repartirlo entre agentes lo alarga.
+- **Cuota de Gemini.** El plan gratuito tiene un tope diario por modelo. Repartirlo entre agentes lo alarga, y Groq u Ollama cubren cuando se agota (Ollama en una laptop sin GPU es lento y redacta peor).
 - **Solo en local y para un usuario.** No tiene login; no está pensado para desplegarse así.
 
 

@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from docx import Document
 
 from app.agents import brujula
-from app.gemini import ResultadoEstructurado
+from app.llm import ResultadoEstructurado
 
 HOY = date(2026, 10, 23)
 

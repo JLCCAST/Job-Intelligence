@@ -14,7 +14,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app import pendientes, services
-from app.cv.cargador import RAIZ
+from app.cv.cargador import RAIZ, guardar_cv_base
+from app.cv.modelo import CVBase
 
 router = APIRouter(prefix="/api")
 
@@ -128,7 +129,22 @@ def responder(thread_id: str, respuestas: list[Respuesta]):
     for r in respuestas:
         if r.la_tengo and not (r.donde or "").strip():
             raise HTTPException(400, f"Indica dónde usaste {r.tecnologia}, o marca que no lo tienes.")
-    return services.responder_preguntas(thread_id, [r.model_dump(exclude_none=True) for r in respuestas])
+    try:
+        return services.responder_preguntas(thread_id, [r.model_dump(exclude_none=True) for r in respuestas])
+    except services.FlujoNoEspera as exc:
+        raise HTTPException(409, str(exc))
+
+
+class Revision(BaseModel):
+    rechazados: list[str] = []  # ids de los cambios de la IA que no quieres
+
+
+@router.post("/cv/flujos/{thread_id}/revisar")
+def revisar(thread_id: str, revision: Revision):
+    try:
+        return services.revisar_cambios(thread_id, revision.rechazados)
+    except services.FlujoNoEspera as exc:
+        raise HTTPException(409, str(exc))
 
 
 @router.get("/archivos")
@@ -162,6 +178,22 @@ def perfil():
         "cv": cv_resumen,
         "respuestas": [r.model_dump() for r in services.cargar_respuestas().values()],
     }
+
+
+@router.get("/cv/base")
+def leer_cv_base():
+    """El CV base completo, para editarlo desde la app."""
+    try:
+        return services.cargar_cv_base().model_dump()
+    except services.CVBaseNoEncontrado as e:
+        raise HTTPException(404, str(e))
+
+
+@router.put("/cv/base")
+def escribir_cv_base(cv: CVBase):
+    """Valida y guarda el CV base (data/cv_base.yaml), con respaldo de la versión anterior."""
+    guardar_cv_base(cv)
+    return {"ok": True, "habilidades": len(cv.skills_declaradas())}
 
 
 class Habilidad(BaseModel):
@@ -260,17 +292,29 @@ def responder_en_vivo(thread_id: str, respuestas: list[Respuesta]):
     for r in respuestas:
         if r.la_tengo and not (r.donde or "").strip():
             raise HTTPException(400, f"Indica dónde usaste {r.tecnologia}, o marca que no lo tienes.")
-    return _transmision(services.responder_preguntas_en_vivo(
-        thread_id, [r.model_dump(exclude_none=True) for r in respuestas]))
+    try:
+        return _transmision(services.responder_preguntas_en_vivo(
+            thread_id, [r.model_dump(exclude_none=True) for r in respuestas]))
+    except services.FlujoNoEspera as exc:
+        raise HTTPException(409, str(exc))
+
+
+@router.post("/vivo/cv/flujos/{thread_id}/revisar")
+def revisar_en_vivo(thread_id: str, revision: Revision):
+    try:
+        return _transmision(services.revisar_cambios_en_vivo(thread_id, revision.rechazados))
+    except services.FlujoNoEspera as exc:
+        raise HTTPException(409, str(exc))
 
 
 @router.get("/agentes")
 def agentes():
-    from app import gemini
+    from app import llm
     from app.agents import eventos
 
     catalogo = []
     for a in eventos.AGENTES:
-        modelos = gemini.modelos_para(a["modelo"]) if a.get("modelo") else []
+        # La cadena completa: sus modelos de Gemini y luego el respaldo (Groq, Ollama).
+        modelos = llm.cadena_para(a["modelo"]) if a.get("modelo") else []
         catalogo.append({**{k: v for k, v in a.items() if k != "modelo"}, "modelos": modelos})
     return {"agentes": catalogo, "actividad": eventos.actividad_reciente()}

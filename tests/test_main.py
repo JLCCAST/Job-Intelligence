@@ -17,7 +17,7 @@ from app.repository import InsertJobResult
 from app.scoring import MatchScoreResult
 from app.scraper import FetchResult
 from app.schemas import ExtractedTechnology, JobExtraction
-from app.gemini import ExtractionResult
+from app.llm import ExtractionResult
 
 client = TestClient(app)
 

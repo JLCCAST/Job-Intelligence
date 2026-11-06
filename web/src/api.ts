@@ -68,14 +68,37 @@ export type ResultadoAnalisis = {
 
 export type Pregunta = { tecnologia: string; requirement_type: string; texto: string };
 
+export type Diferencia = { tipo: "igual" | "quitado" | "agregado"; texto: string };
+
+/** Un cambio de la IA en tu CV, explicado por Notario (o con motivo automático). */
+export type CambioCV = {
+  id: string;
+  seccion: "perfil" | "experiencia" | "proyectos";
+  item: string;
+  original: string;
+  nuevo: string;
+  diferencias: Diferencia[];
+  similitud: number; // 0 a 1: si es baja, se muestra "antes / ahora"
+  motivo: string;
+  motivo_de: "notario" | "calculado";
+  requisitos: string[];
+  atencion: string | null;
+  alerta: string | null;
+};
+
 export type FlujoCV = {
   thread_id: string;
   esperando_respuestas: boolean;
   preguntas: Pregunta[];
+  esperando_revision: boolean;
+  cambios: CambioCV[];
+  estructura: string[];
+  notario_error: string | null;
   ruta_cv: string | null;
   ruta_brechas: string | null;
   usa_texto_de_pluma: boolean;
   avisos: string[];
+  rechazados: string[];
 };
 
 export type Respuesta = {
@@ -90,6 +113,20 @@ export type Perfil = {
   habilidades: { tecnologia: string; categoria: string; nivel: string; meses_experiencia: number | null; evidencia: string | null }[];
   cv: { nombre: string; perfil: string; experiencias: number; proyectos: { nombre: string; logros: string[]; stack: string[] }[]; habilidades: number } | null;
   respuestas: Respuesta[];
+};
+
+/** El CV base completo (data/cv_base.yaml), tal como lo valida app/cv/modelo.py. */
+export type CVBase = {
+  contacto: Record<string, string | null | undefined>;
+  perfil: string;
+  experiencia: { empresa: string; cargo: string; ubicacion?: string | null; inicio: string; fin: string; logros: string[]; stack: string[] }[];
+  proyectos: { nombre: string; contexto?: string | null; fecha?: string | null; logros: string[]; stack: string[] }[];
+  habilidades: { grupo: string; items: { nombre: string; nivel?: string | null }[] }[];
+  educacion: unknown[];
+  logros: unknown[];
+  certificados: { nombre: string; emisor: string }[];
+  idiomas: unknown[];
+  competencias: string[];
 };
 
 export type Prioridad = {
@@ -173,6 +210,9 @@ export const api = {
   responder: (threadId: string, respuestas: Respuesta[]) =>
     post<FlujoCV>(`/cv/flujos/${threadId}/responder`, respuestas),
   perfil: () => pedir<Perfil>("/perfil"),
+  cvBase: () => pedir<CVBase>("/cv/base"),
+  guardarCvBase: (cv: CVBase) =>
+    pedir<{ ok: boolean; habilidades: number }>("/cv/base", { method: "PUT", body: JSON.stringify(cv) }),
   guardarHabilidad: (h: { nombre: string; categoria: string; nivel: string; meses_experiencia?: number; evidencia: string }) =>
     post<{ ok: boolean }>("/perfil/habilidades", h),
   catalogoRevision: () => pedir<{ technology_id: number; tecnologia: string; categoria: string; ofertas: number }[]>("/catalogo/revision"),
@@ -238,6 +278,8 @@ export const vivo = {
     transmitir<FlujoCV>(`/cv/${jobId}/iniciar`, undefined, alEvento),
   responder: (alEvento: (ev: EventoAgente) => void, threadId: string, respuestas: Respuesta[]) =>
     transmitir<FlujoCV>(`/cv/flujos/${threadId}/responder`, respuestas, alEvento),
+  revisar: (alEvento: (ev: EventoAgente) => void, threadId: string, rechazados: string[]) =>
+    transmitir<FlujoCV>(`/cv/flujos/${threadId}/revisar`, { rechazados }, alEvento),
 };
 
 export type AgenteInfo = {

@@ -5,7 +5,7 @@ el flujo se corte donde corresponde. Todo lo que sale de la máquina
 """
 
 from app.agents import archivero, balanza, batuta, lupa
-from app.gemini import ExtractionResult
+from app.llm import ExtractionResult
 from app.repository import InsertJobResult
 from app.schemas import JobExtraction
 from app.scoring import MatchScoreResult

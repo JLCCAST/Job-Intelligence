@@ -1,5 +1,5 @@
 import {
-  Archive, Bell, Compass, MessageCircleQuestion, PenLine, Printer, Radar, Scale, Search, ShieldCheck, Workflow,
+  Archive, Bell, Compass, MessageCircleQuestion, PenLine, Printer, Radar, Scale, Search, ShieldCheck, Stamp, Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -13,6 +13,7 @@ export const AGENTE: Record<string, { nombre: string; rol: string; icono: Lucide
   pregunton: { nombre: "Preguntón", rol: "Entrevistador", icono: MessageCircleQuestion, color: "#e0892b" },
   pluma: { nombre: "Pluma", rol: "Redactor", icono: PenLine, color: "#d4537e" },
   validador: { nombre: "Validador", rol: "Control de calidad", icono: ShieldCheck, color: "#3b6d11" },
+  notario: { nombre: "Notario", rol: "Auditor de cambios", icono: Stamp, color: "#6b5bb5" },
   imprenta: { nombre: "Imprenta", rol: "Documentador", icono: Printer, color: "#546078" },
   centinela: { nombre: "Centinela", rol: "Seguimiento", icono: Bell, color: "#b3261e" },
   brujula: { nombre: "Brújula", rol: "Mentor", icono: Compass, color: "#eb6834" },

@@ -33,7 +33,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.cv.cargador import RAIZ
-from app.gemini import generar_estructurado
+from app.llm import generar_estructurado
 from app.scoring import ORDEN_NIVEL
 
 PESO_TIPO = {"required": 1.0, "preferred": 0.5}

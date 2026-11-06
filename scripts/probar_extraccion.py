@@ -7,7 +7,7 @@ Correr desde la raíz del proyecto, con el venv activo:
 Requiere GEMINI_API_KEY en el .env.
 """
 
-from app.gemini import extract_job_info
+from app.llm import extract_job_info
 
 CASOS = {
     "A) Empresa con nombre propio explícito": """
